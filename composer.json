@@ -1,0 +1,39 @@
+{
+    "name": "j87nl/laravel-cms",
+    "description": "Block-based CMS core for Laravel: pages, blocks and server-side public rendering.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.5",
+        "illuminate/support": "^13.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^11.0",
+        "pestphp/pest": "^5.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "J87NL\\Cms\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "J87NL\\Cms\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "J87NL\\Cms\\CmsServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
