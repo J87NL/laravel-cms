@@ -9,6 +9,7 @@ use J87NL\Cms\Blocks\ReferencesMedia;
 use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\MediaAsset;
 use J87NL\Cms\Models\Page;
+use J87NL\Cms\Models\SiteSettings;
 
 class MediaUsage
 {
@@ -43,11 +44,18 @@ class MediaUsage
                 });
         }
 
-        $openGraphIds = Page::query()
-            ->whereNotNull('og_image_id')
-            ->pluck('og_image_id');
+        $settings = SiteSettings::current();
 
-        foreach ($openGraphIds as $id) {
+        $referencedIds = [
+            ...Page::query()
+                ->whereNotNull('og_image_id')
+                ->pluck('og_image_id')
+                ->all(),
+            $settings->og_image_id,
+            $settings->entity_image_id,
+        ];
+
+        foreach (array_filter($referencedIds, fn (mixed $id): bool => is_numeric($id)) as $id) {
             $counts[(int) $id] = ($counts[(int) $id] ?? 0) + 1;
         }
 

@@ -6,6 +6,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use J87NL\Cms\Actions\DeleteMedia;
+use J87NL\Cms\Actions\SaveSiteSettings;
 use J87NL\Cms\Actions\UploadMedia;
 use J87NL\Cms\Models\MediaAsset;
 
@@ -76,6 +77,31 @@ test('media in use cannot be deleted', function (): void {
 
     expect(MediaAsset::query()
         ->whereKey($asset->id)->exists())->toBeTrue();
+});
+
+test('media used in the site settings cannot be deleted', function (): void {
+    $asset = uploadImage();
+
+    app(SaveSiteSettings::class)->handle([
+        'og_image_id' => $asset->id,
+    ]);
+
+    expect(fn () => app(DeleteMedia::class)->handle($asset))->toThrow(ValidationException::class);
+});
+
+test('shared pages use the largest webp version as open graph image', function (): void {
+    $asset = uploadImage(2000, 1000);
+
+    makePage([
+        'title' => 'Photo',
+        'slug' => 'photo',
+        'og_image_id' => $asset->id,
+    ]);
+
+    $this->get('/photo')
+        ->assertSee('<meta property="og:image:width" content="1600">', false)
+        ->assertSee('<meta property="og:image:height" content="800">', false)
+        ->assertSee('<meta name="twitter:card" content="summary_large_image">', false);
 });
 
 test('unused media can be deleted together with its files', function (): void {

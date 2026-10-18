@@ -29,7 +29,7 @@ class AddSecurityHeaders
         $headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), interest-cohort=()');
 
         if ($request->isSecure()) {
-            $headers->set('Strict-Transport-Security', sprintf('max-age=%d; includeSubDomains', (int) config('cms.security_headers.hsts_max_age', 31536000)));
+            $headers->set('Strict-Transport-Security', sprintf('max-age=%d', (int) config('cms.security_headers.hsts_max_age', 31536000)));
         }
 
         return $response;

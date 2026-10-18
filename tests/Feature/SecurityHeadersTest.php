@@ -43,5 +43,5 @@ test('secure requests get hsts', function (): void {
         'slug' => 'about',
     ]);
 
-    $this->get('https://localhost/about')->assertHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    $this->get('https://localhost/about')->assertHeader('Strict-Transport-Security', 'max-age=31536000');
 });
