@@ -3,6 +3,24 @@
     "description": "Block-based CMS core for Laravel: pages, blocks and server-side public rendering.",
     "type": "library",
     "license": "MIT",
+    "keywords": [
+        "laravel",
+        "cms",
+        "blocks",
+        "seo",
+        "sitemap"
+    ],
+    "homepage": "https://github.com/J87NL/laravel-cms",
+    "authors": [
+        {
+            "name": "Johan Montenij",
+            "homepage": "https://j87.nl"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/J87NL/laravel-cms/issues",
+        "source": "https://github.com/J87NL/laravel-cms"
+    },
     "require": {
         "php": "^8.5",
         "illuminate/cache": "^13.0",

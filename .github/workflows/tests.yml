@@ -1,0 +1,21 @@
+name: Tests
+on:
+  push:
+    branches: main
+  pull_request:
+jobs:
+  test:
+    name: Pest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup PHP
+        uses: shivammathur/setup-php@master
+        with:
+          php-version: 8.5
+          extensions: mbstring, intl, gd, zip, pdo_sqlite
+          coverage: none
+      - name: Composer install
+        run: composer update --no-interaction --prefer-dist --ansi
+      - name: Test
+        run: vendor/bin/pest
