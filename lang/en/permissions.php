@@ -6,6 +6,5 @@ return [
     'cms.pages.edit' => 'Edit pages',
     'cms.pages.publish' => 'Publish pages',
     'cms.menus' => 'Manage menus',
-    'cms.redirects' => 'Manage redirects',
-    'cms.settings' => 'Manage website settings',
+    'cms.media' => 'Manage media',
 ];

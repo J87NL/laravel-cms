@@ -1,0 +1,116 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
+use J87NL\Cms\Actions\DeleteMedia;
+use J87NL\Cms\Actions\UploadMedia;
+use J87NL\Cms\Models\MediaAsset;
+
+beforeEach(function (): void {
+    Storage::fake('public');
+});
+
+test('an upload stores the original size and creates webp conversions', function (): void {
+    $asset = uploadImage(2000, 1000);
+
+    $media = $asset->file();
+
+    expect($asset->width())->toBe(2000)
+        ->and($asset->height())->toBe(1000)
+        ->and($media->hasGeneratedConversion('w480'))->toBeTrue()
+        ->and($media->hasGeneratedConversion('w1600'))->toBeTrue()
+        ->and($media->getPath('w960'))->toEndWith('.webp')
+        ->and(collect($asset->sources())->pluck('width')->all())->toBe([480, 960, 1600]);
+});
+
+test('small images are not upscaled', function (): void {
+    $asset = uploadImage(700, 350);
+
+    expect(collect($asset->sources())->pluck('width')->all())->toBe([480, 700]);
+});
+
+test('images render responsive and lazy except in the first block', function (): void {
+    $first = uploadImage(alt: 'First photo');
+    $second = uploadImage(alt: 'Second photo');
+
+    $page = makePage([
+        'slug' => 'photos',
+    ]);
+    addBlock($page, 'image', [
+        'media_id' => $first->id,
+    ]);
+    addBlock($page, 'image', [
+        'media_id' => $second->id,
+    ]);
+
+    $html = (string) $this->get('/photos')->assertOk()->getContent();
+
+    preg_match_all('/<img[^>]*>/s', $html, $matches);
+
+    [$firstImage, $secondImage] = $matches[0];
+
+    expect($firstImage)
+        ->toContain('alt="First photo"')
+        ->toContain('loading="eager"')
+        ->toContain('480w')
+        ->toContain('1600w')
+        ->toContain('sizes="')
+        ->toContain('width="2000"')
+        ->toContain('height="1000"')
+        ->and($secondImage)
+        ->toContain('alt="Second photo"')
+        ->toContain('loading="lazy"');
+});
+
+test('media in use cannot be deleted', function (): void {
+    $asset = uploadImage();
+    $page = makePage();
+    addBlock($page, 'gallery', [
+        'media_ids' => [$asset->id],
+    ]);
+
+    expect(fn () => app(DeleteMedia::class)->handle($asset))->toThrow(ValidationException::class);
+
+    expect(MediaAsset::query()
+        ->whereKey($asset->id)->exists())->toBeTrue();
+});
+
+test('unused media can be deleted together with its files', function (): void {
+    $asset = uploadImage();
+    $path = $asset->file()->getPathRelativeToRoot();
+
+    app(DeleteMedia::class)->handle($asset);
+
+    expect(MediaAsset::query()
+        ->whereKey($asset->id)->exists())->toBeFalse();
+
+    Storage::disk('public')->assertMissing($path);
+});
+
+test('location metadata is removed from the stored original', function (): void {
+    $source = tempnam(sys_get_temp_dir(), 'gps').'.jpg';
+    $image = imagecreatetruecolor(640, 480);
+    imagejpeg($image, $source);
+
+    $tiff = "II\x2A\x00\x08\x00\x00\x00"
+        ."\x01\x00"."\x25\x88\x04\x00\x01\x00\x00\x00\x1A\x00\x00\x00"."\x00\x00\x00\x00"
+        ."\x01\x00"."\x01\x00\x02\x00\x02\x00\x00\x00N\x00\x00\x00"."\x00\x00\x00\x00";
+    $exif = "Exif\x00\x00".$tiff;
+    $segment = "\xFF\xE1".pack('n', strlen($exif) + 2).$exif;
+    $jpeg = (string) file_get_contents($source);
+    file_put_contents($source, substr($jpeg, 0, 2).$segment.substr($jpeg, 2));
+
+    expect(exif_read_data($source))->toHaveKey('GPSLatitudeRef');
+
+    $asset = app(UploadMedia::class)->handle(new UploadedFile($source, 'photo.jpg', 'image/jpeg', null, true), [
+        'alt' => 'Photo',
+    ]);
+
+    $stored = Storage::disk('public')->path($asset->file()->getPathRelativeToRoot());
+
+    expect((string) file_get_contents($stored))->not->toContain('Exif')
+        ->and($asset->width())->toBe(640);
+});

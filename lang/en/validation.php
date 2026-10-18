@@ -1,0 +1,24 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+    'embed_not_allowed' => 'Only embeds from youtube-nocookie.com/embed/ or the OpenStreetMap embed address are allowed.',
+    'unsafe_link' => 'Use a path such as /contact, or an address starting with https://, http://, mailto: or tel:.',
+    'path_taken' => 'Another page already uses the address :path.',
+    'path_reserved' => 'The address :path is used by the application itself.',
+    'invalid_parent' => 'A page cannot be placed under itself or under one of its subpages.',
+    'delete_home' => 'The home page cannot be deleted. Make another page the home page first.',
+    'delete_has_children' => 'This page has subpages. Move or delete them first.',
+    'media_in_use' => 'This image is still used on a page.',
+    'menu_link_required' => 'Choose a page or enter a link.',
+    'path_too_long' => 'The address :path is longer than :max characters.',
+    'unpublish_home' => 'The home page cannot be taken offline. Make another published page the home page first.',
+    'home_not_public' => 'Only a published page whose parent pages are all published can be the home page.',
+    'unpublish_home_ancestor' => 'This page contains the home page. Make another page the home page before taking it offline.',
+    'home_parent_not_public' => 'The home page and the pages above it can only be placed under published pages.',
+    'busy' => 'Someone else is changing the home page right now. Please try again.',
+    'image_unreadable' => 'This image cannot be read. Save it again as JPEG or PNG and try again.',
+    'image_too_large' => 'This image has too many pixels. Use an image of at most :megapixels megapixels.',
+    'image_animated' => 'Animated GIFs are not supported. Upload a still image.',
+];

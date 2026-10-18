@@ -1,0 +1,24 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+    'embed_not_allowed' => 'Alleen insluitingen van youtube-nocookie.com/embed/ of het insluitadres van OpenStreetMap zijn toegestaan.',
+    'unsafe_link' => 'Gebruik een pad zoals /contact, of een adres dat begint met https://, http://, mailto: of tel:.',
+    'path_taken' => 'Een andere pagina gebruikt het adres :path al.',
+    'path_reserved' => 'Het adres :path wordt door de applicatie zelf gebruikt.',
+    'invalid_parent' => 'Een pagina kan niet onder zichzelf of onder een van haar subpagina\'s staan.',
+    'delete_home' => 'De startpagina kan niet worden verwijderd. Maak eerst een andere pagina de startpagina.',
+    'delete_has_children' => 'Deze pagina heeft subpagina\'s. Verplaats of verwijder die eerst.',
+    'media_in_use' => 'Deze afbeelding wordt nog op een pagina gebruikt.',
+    'menu_link_required' => 'Kies een pagina of vul een link in.',
+    'path_too_long' => 'Het adres :path is langer dan :max tekens.',
+    'unpublish_home' => 'De startpagina kan niet offline worden gehaald. Maak eerst een andere gepubliceerde pagina de startpagina.',
+    'home_not_public' => 'Alleen een gepubliceerde pagina waarvan alle bovenliggende pagina\'s gepubliceerd zijn, kan de startpagina zijn.',
+    'unpublish_home_ancestor' => 'De startpagina valt onder deze pagina. Maak eerst een andere pagina de startpagina voordat je deze offline haalt.',
+    'home_parent_not_public' => 'De startpagina en de pagina\'s erboven kunnen alleen onder gepubliceerde pagina\'s staan.',
+    'busy' => 'Iemand anders wijzigt op dit moment de startpagina. Probeer het nog eens.',
+    'image_unreadable' => 'Deze afbeelding kan niet worden gelezen. Sla hem opnieuw op als JPEG of PNG en probeer het nog eens.',
+    'image_too_large' => 'Deze afbeelding heeft te veel pixels. Gebruik een afbeelding van maximaal :megapixels megapixels.',
+    'image_animated' => 'Bewegende GIF\'s worden niet ondersteund. Upload een stilstaande afbeelding.',
+];
