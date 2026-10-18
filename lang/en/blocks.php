@@ -66,6 +66,11 @@ return [
             'date' => 'Date',
             'item_title' => 'Title',
             'description' => 'Description',
+            'location_name' => 'Location',
+            'location_address' => 'Location address',
+        ],
+        'help' => [
+            'location_name' => 'Optional. With a location, search engines can show the dates as events.',
         ],
     ],
 ];

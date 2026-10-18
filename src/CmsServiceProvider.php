@@ -16,6 +16,8 @@ use J87NL\Cms\Blocks\Types\ImageBlock;
 use J87NL\Cms\Blocks\Types\RichTextBlock;
 use J87NL\Cms\Blocks\Types\TextWithImageBlock;
 use J87NL\Cms\Html\RichTextSanitizer;
+use J87NL\Cms\Models\Page;
+use J87NL\Cms\Redirects\RecordPathRedirects;
 
 class CmsServiceProvider extends ServiceProvider
 {
@@ -58,6 +60,8 @@ class CmsServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
         Blade::componentNamespace('J87NL\\Cms\\View\\Components', 'cms');
+
+        Page::observe(RecordPathRedirects::class);
 
         if (config('cms.routes.enabled', true)) {
             $this->loadRoutesFrom(__DIR__.'/../routes/public.php');

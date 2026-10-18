@@ -2,6 +2,10 @@
 
 @section('title', __('cms::public.not_found.title'))
 
+@section('head')
+    <meta name="robots" content="noindex">
+@endsection
+
 @section('content')
     <article class="cms-page cms-page--not-found">
         <h1 class="cms-page__title">{{ __('cms::public.not_found.title') }}</h1>

@@ -21,4 +21,9 @@ return [
     'image_unreadable' => 'Deze afbeelding kan niet worden gelezen. Sla hem opnieuw op als JPEG of PNG en probeer het nog eens.',
     'image_too_large' => 'Deze afbeelding heeft te veel pixels. Gebruik een afbeelding van maximaal :megapixels megapixels.',
     'image_animated' => 'Bewegende GIF\'s worden niet ondersteund. Upload een stilstaande afbeelding.',
+    'redirect_from_home' => 'De startpagina kan niet worden doorverwezen.',
+    'redirect_from_page' => 'Het adres :path hoort bij een pagina. Verplaats of hernoem die pagina in plaats van een doorverwijzing te maken.',
+    'redirect_taken' => 'Er is al een doorverwijzing vanaf :path.',
+    'redirect_loop' => 'Deze doorverwijzing zou in een kringetje verwijzen.',
+    'invalid_profile_url' => 'Het adres :url is geen geldige link. Zet één volledig adres per regel, beginnend met https://.',
 ];

@@ -7,4 +7,6 @@ return [
     'cms.pages.publish' => 'Pagina\'s publiceren',
     'cms.menus' => 'Menu\'s beheren',
     'cms.media' => 'Media beheren',
+    'cms.redirects' => 'Doorverwijzingen beheren',
+    'cms.settings' => 'Website-instellingen beheren',
 ];

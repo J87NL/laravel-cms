@@ -10,6 +10,8 @@ enum CmsPermission: string
     case PagesPublish = 'cms.pages.publish';
     case Menus = 'cms.menus';
     case Media = 'cms.media';
+    case Redirects = 'cms.redirects';
+    case Settings = 'cms.settings';
 
     public function label(): string
     {

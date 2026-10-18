@@ -7,12 +7,13 @@ namespace J87NL\Cms\Blocks\Types;
 use Illuminate\Support\Carbon;
 use J87NL\Cms\Blocks\AbstractBlockType;
 use J87NL\Cms\Blocks\BlockContext;
+use J87NL\Cms\Blocks\HasJsonLd;
 use TranquilTools\FormBuilder\Fields\Date;
 use TranquilTools\FormBuilder\Fields\Repeater;
 use TranquilTools\FormBuilder\Fields\Text;
 use TranquilTools\FormBuilder\Fields\Textarea;
 
-class DatesBlock extends AbstractBlockType
+class DatesBlock extends AbstractBlockType implements HasJsonLd
 {
     public function key(): string
     {
@@ -33,6 +34,23 @@ class DatesBlock extends AbstractBlockType
                     'nullable',
                     'string',
                     'max:160',
+                ]),
+
+            Text::make('location_name')
+                ->label(__('cms::blocks.dates.fields.location_name'))
+                ->help(__('cms::blocks.dates.help.location_name'))
+                ->rules([
+                    'nullable',
+                    'string',
+                    'max:160',
+                ]),
+
+            Text::make('location_address')
+                ->label(__('cms::blocks.dates.fields.location_address'))
+                ->rules([
+                    'nullable',
+                    'string',
+                    'max:255',
                 ]),
 
             Repeater::make('items')
@@ -77,6 +95,8 @@ class DatesBlock extends AbstractBlockType
     {
         return [
             'title' => trim($this->string($data, 'title')),
+            'location_name' => trim($this->string($data, 'location_name')),
+            'location_address' => trim($this->string($data, 'location_address')),
             'items' => $this->items($data),
         ];
     }
@@ -85,6 +105,10 @@ class DatesBlock extends AbstractBlockType
     {
         return [
             'title' => $this->string($data, 'title'),
+            'location' => trim(implode(', ', array_filter([
+                trim($this->string($data, 'location_name')),
+                trim($this->string($data, 'location_address')),
+            ]))),
             'items' => array_map(
                 fn (array $item): array => [
                     ...$item,
@@ -104,6 +128,55 @@ class DatesBlock extends AbstractBlockType
         }
 
         return trim(implode(' ', $lines));
+    }
+
+    public function jsonLd(array $data): array
+    {
+        $location = $this->location($data);
+        $events = [];
+
+        foreach ($this->items($data) as $item) {
+            $event = [
+                '@type' => 'Event',
+                'name' => $item['title'],
+                'startDate' => $item['date'],
+                'endDate' => $item['date'],
+                'eventStatus' => 'https://schema.org/EventScheduled',
+                'eventAttendanceMode' => 'https://schema.org/OfflineEventAttendanceMode',
+            ];
+
+            if ($item['description'] !== '') {
+                $event['description'] = $item['description'];
+            }
+
+            if (! is_null($location)) {
+                $event['location'] = $location;
+            }
+
+            $events[] = $event;
+        }
+
+        return $events;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|null
+     */
+    private function location(array $data): ?array
+    {
+        $name = trim($this->string($data, 'location_name'));
+        $address = trim($this->string($data, 'location_address'));
+
+        if ($name === '' && $address === '') {
+            return null;
+        }
+
+        return [
+            '@type' => 'Place',
+            'name' => $name === '' ? $address : $name,
+            'address' => $address === '' ? $name : $address,
+        ];
     }
 
     /**

@@ -42,6 +42,7 @@ abstract class AbstractBlockType implements BlockType
 
     protected function plain(string $html): string
     {
+        $html = (string) preg_replace('#<(script|style|iframe)\b[^>]*>.*?</\1\s*>#is', ' ', $html);
         $text = html_entity_decode(strip_tags(str_replace('<', ' <', $html)), ENT_QUOTES | ENT_HTML5);
 
         return trim((string) preg_replace('/\s+/u', ' ', $text));

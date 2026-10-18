@@ -66,6 +66,11 @@ return [
             'date' => 'Datum',
             'item_title' => 'Titel',
             'description' => 'Omschrijving',
+            'location_name' => 'Locatie',
+            'location_address' => 'Adres van de locatie',
+        ],
+        'help' => [
+            'location_name' => 'Optioneel. Met een locatie kunnen zoekmachines de datums als evenement tonen.',
         ],
     ],
 ];

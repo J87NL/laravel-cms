@@ -10,13 +10,16 @@ use Illuminate\Http\Response;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Str;
 use J87NL\Cms\Models\Page;
+use J87NL\Cms\Models\Redirect;
 use J87NL\Cms\Pages\PageVisibility;
+use J87NL\Cms\Rendering\PageResponse;
 use J87NL\Cms\View\Components\Menu;
 
 class PublicPageController extends Controller
 {
     public function __construct(
         private readonly PageVisibility $visibility,
+        private readonly PageResponse $pageResponse,
     ) {}
 
     public function home(Request $request): Response
@@ -50,7 +53,7 @@ class PublicPageController extends Controller
             ->first();
 
         if (is_null($page) || ! $this->visibility->isPublic($page)) {
-            return $this->notFound($request);
+            return $this->redirectFor($request, $path) ?? $this->notFound($request);
         }
 
         if ($page->is_home) {
@@ -64,6 +67,28 @@ class PublicPageController extends Controller
         return $this->page($page);
     }
 
+    private function redirectFor(Request $request, string $path): ?RedirectResponse
+    {
+        $redirect = Redirect::query()
+            ->where('from_path', $path)
+            ->first();
+
+        if (is_null($redirect)) {
+            return null;
+        }
+
+        $redirect->recordHit();
+
+        $query = $request->getQueryString();
+        $target = $redirect->to;
+
+        if (! is_null($query) && ! str_contains($target, '?') && ! str_contains($target, '#')) {
+            $target = sprintf('%s?%s', $target, $query);
+        }
+
+        return redirect($target, $redirect->status_code);
+    }
+
     private function redirect(Request $request, string $path): RedirectResponse
     {
         $query = $request->getQueryString();
@@ -73,9 +98,7 @@ class PublicPageController extends Controller
 
     private function page(Page $page): Response
     {
-        return response()->view('cms::page', [
-            'page' => $page,
-        ]);
+        return $this->pageResponse->make($page);
     }
 
     private function notFound(Request $request): Response

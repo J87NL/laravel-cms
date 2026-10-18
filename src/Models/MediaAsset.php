@@ -180,6 +180,27 @@ class MediaAsset extends Model implements HasMedia
         ];
     }
 
+    /**
+     * @return array{url: string, width: int, height: int}|null
+     */
+    public function largestSource(): ?array
+    {
+        $sources = $this->sources();
+        $largest = end($sources);
+
+        if ($largest === false) {
+            return null;
+        }
+
+        $height = $this->width() > 0 ? (int) round($largest['width'] * $this->height() / $this->width()) : 0;
+
+        return [
+            'url' => $largest['url'],
+            'width' => $largest['width'],
+            'height' => $height,
+        ];
+    }
+
     public function thumbnailUrl(): ?string
     {
         return $this->sources()[0]['url'] ?? null;

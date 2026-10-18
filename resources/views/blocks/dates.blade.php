@@ -3,6 +3,10 @@
         <h2 class="cms-dates__heading">{{ $title }}</h2>
     @endif
 
+    @if ($location !== '')
+        <p class="cms-dates__location">{{ $location }}</p>
+    @endif
+
     <ol class="cms-dates">
         @foreach ($items as $item)
             <li class="cms-dates__item">

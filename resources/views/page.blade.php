@@ -1,6 +1,10 @@
 @extends(config('cms.layout'))
 
-@section('title', $page->meta_title ?: $page->title)
+@section('title', $title)
+
+@section('head')
+    <x-cms::seo :page="$page" :preview="$preview ?? false" />
+@endsection
 
 @section('content')
     <article class="cms-page">

@@ -21,4 +21,9 @@ return [
     'image_unreadable' => 'This image cannot be read. Save it again as JPEG or PNG and try again.',
     'image_too_large' => 'This image has too many pixels. Use an image of at most :megapixels megapixels.',
     'image_animated' => 'Animated GIFs are not supported. Upload a still image.',
+    'redirect_from_home' => 'The home page cannot be redirected.',
+    'redirect_from_page' => 'The address :path belongs to a page. Move or rename that page instead of adding a redirect.',
+    'redirect_taken' => 'A redirect from :path already exists.',
+    'redirect_loop' => 'This redirect would point in a loop.',
+    'invalid_profile_url' => 'The address :url is not a valid link. Put one full address per line, starting with https://.',
 ];

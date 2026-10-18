@@ -58,8 +58,10 @@ test('public responses set no cookies and contain no scripts', function (): void
     foreach (['/', '/about', '/missing'] as $path) {
         $response = $this->get($path);
 
+        $html = (string) preg_replace('#<script type="application/ld\+json">.*?</script>#s', '', (string) $response->getContent());
+
         expect($response->headers->getCookies())->toBeEmpty()
-            ->and(strtolower((string) $response->getContent()))->not->toContain('<script');
+            ->and(strtolower($html))->not->toContain('<script');
     }
 });
 
