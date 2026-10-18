@@ -25,5 +25,7 @@ return [
     'redirect_from_page' => 'The address :path belongs to a page. Move or rename that page instead of adding a redirect.',
     'redirect_taken' => 'A redirect from :path already exists.',
     'redirect_loop' => 'This redirect would point in a loop.',
+    'schedule_in_past' => 'Choose a moment in the future.',
+    'unpublish_before_publish' => 'Taking offline has to come after publishing.',
     'invalid_profile_url' => 'The address :url is not a valid link. Put one full address per line, starting with https://.',
 ];

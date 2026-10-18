@@ -25,5 +25,7 @@ return [
     'redirect_from_page' => 'Het adres :path hoort bij een pagina. Verplaats of hernoem die pagina in plaats van een doorverwijzing te maken.',
     'redirect_taken' => 'Er is al een doorverwijzing vanaf :path.',
     'redirect_loop' => 'Deze doorverwijzing zou in een kringetje verwijzen.',
+    'schedule_in_past' => 'Kies een moment in de toekomst.',
+    'unpublish_before_publish' => 'Offline halen moet na het publiceren komen.',
     'invalid_profile_url' => 'Het adres :url is geen geldige link. Zet één volledig adres per regel, beginnend met https://.',
 ];

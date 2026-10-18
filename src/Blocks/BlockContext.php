@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace J87NL\Cms\Blocks;
 
 use Illuminate\Support\Collection;
+use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\MediaAsset;
 use J87NL\Cms\Models\Page;
 
@@ -17,6 +18,7 @@ final readonly class BlockContext
         public Page $page,
         public int $position,
         public Collection $media,
+        public ?Block $block = null,
     ) {}
 
     public function isFirst(): bool

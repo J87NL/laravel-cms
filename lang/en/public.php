@@ -12,4 +12,7 @@ return [
         'text' => 'This page does not exist (anymore).',
         'home' => 'Go to the home page',
     ],
+    'llms' => [
+        'pages' => 'Pages',
+    ],
 ];

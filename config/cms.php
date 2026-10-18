@@ -31,6 +31,39 @@ return [
 
     'user_model' => null,
 
+    'cache' => [
+        'enabled' => true,
+        'store' => null,
+        'ttl' => 86400,
+    ],
+
+    'preview' => [
+        'minutes' => 60,
+    ],
+
+    'scheduling' => [
+        'enabled' => true,
+    ],
+
+    'robots' => [
+        'disallow' => [
+            '/admin',
+        ],
+    ],
+
+    'security_headers' => [
+        'enabled' => true,
+        'hsts_max_age' => 31536000,
+        'csp' => [],
+    ],
+
+    'contact' => [
+        'recipient' => null,
+        'per_hour' => 5,
+        'min_seconds' => 3,
+        'max_seconds' => 172800,
+    ],
+
     'media' => [
         'disk' => 'public',
         'max_upload_kilobytes' => 10240,

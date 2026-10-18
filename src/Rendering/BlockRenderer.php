@@ -62,7 +62,7 @@ class BlockRenderer
         $rendered = [];
 
         foreach ($renderable as $position => $item) {
-            $rendered[] = $this->renderBlock($item['block'], $item['type'], new BlockContext($page, $position, $media));
+            $rendered[] = $this->renderBlock($item['block'], $item['type'], new BlockContext($page, $position, $media, $item['block']));
         }
 
         return $rendered;

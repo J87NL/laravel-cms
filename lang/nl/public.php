@@ -12,4 +12,7 @@ return [
         'text' => 'Deze pagina bestaat niet (meer).',
         'home' => 'Naar de startpagina',
     ],
+    'llms' => [
+        'pages' => 'Pagina\'s',
+    ],
 ];
