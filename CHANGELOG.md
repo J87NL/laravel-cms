@@ -4,6 +4,10 @@ All notable changes to this package are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Security
+
+- Requires `symfony/html-sanitizer` ^7.4.13 or ^8.0.13, so a host can no longer resolve versions with the URL attribute sanitising vulnerabilities (CVE-2026-45064, CVE-2026-45066, CVE-2026-45753, CVE-2026-48760, CVE-2026-48761).
+
 ## [0.1.0]
 
 First release, extracted from the j87.nl app.

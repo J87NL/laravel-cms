@@ -31,7 +31,7 @@
         "illuminate/validation": "^13.0",
         "illuminate/view": "^13.0",
         "spatie/laravel-medialibrary": "^11.23",
-        "symfony/html-sanitizer": "^7.3|^8.0",
+        "symfony/html-sanitizer": "^7.4.13|^8.0.13",
         "tranquil-tools/laravel-form-builder": "^1.7"
     },
     "require-dev": {
