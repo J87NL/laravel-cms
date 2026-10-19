@@ -30,6 +30,7 @@
         "illuminate/support": "^13.0",
         "illuminate/validation": "^13.0",
         "illuminate/view": "^13.0",
+        "laravel/mcp": "^0.7",
         "spatie/laravel-medialibrary": "^11.23",
         "symfony/html-sanitizer": "^7.4.13|^8.0.13",
         "tranquil-tools/laravel-form-builder": "^1.7"

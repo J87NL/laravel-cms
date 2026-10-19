@@ -77,6 +77,63 @@ The package ships no CSS. The contact form hides its honeypot field with the cla
 
 The image focal point is an inline `object-position` style, so the Content-Security-Policy allows `style-src-attr 'unsafe-inline'`.
 
+## MCP tools via the J87 MCP hub
+
+The package ships CMS tools on [`laravel/mcp`](https://github.com/laravel/mcp), meant to be offered to assistants through the J87 MCP hub. The hub adds the app prefix (for example `j87_`), so the tool names here are short and unprefixed.
+
+| Tool | Read-only | Destructive | Permission |
+| --- | --- | --- | --- |
+| `pages_list` | yes | no | `cms.pages.edit` |
+| `page_get` | yes | no | `cms.pages.edit` |
+| `media_list` | yes | no | `cms.media` |
+| `menu_items_list` | yes | no | `cms.menus` |
+| `redirects_list` | yes | no | `cms.redirects` |
+| `page_draft_create` | no | no | `cms.pages.edit` |
+| `page_update` | no | no | `cms.pages.edit` |
+| `block_add` | no | no | `cms.pages.edit` |
+| `block_update` | no | no | `cms.pages.edit` |
+| `block_remove` | no | yes | `cms.pages.edit` |
+| `blocks_reorder` | no | no | `cms.pages.edit` |
+| `menu_item_save` | no | yes | `cms.menus` |
+| `redirect_save` | no | no | `cms.redirects` |
+| `redirect_delete` | no | yes | `cms.redirects` |
+
+- No tool publishes, unpublishes, schedules, makes a home page, deletes pages or uploads media. Publishing stays in the CMS admin.
+- Page and block writes only act on draft or unpublished pages without a planned publication (`publish_at`), also for users who may publish. When the app defines the `cms.pages.write` gate (as `j87nl/laravel-vue-cms` does), the tools check it as well.
+- Writes go through the same actions and validation rules as the admin (`J87NL\Cms\Validation\PageRules` and `RedirectRules`), so validation, sanitizing, revisions and cache invalidation are the same. Menu items and redirects take effect on the live website immediately, which is why `menu_item_save` is marked destructive, like `block_remove` and `redirect_delete`: the hub starts destructive tools disabled until an admin enables them.
+- Every tool runs as the authenticated user and checks the CMS permission above. A missing user or permission returns an error result with a sentence, never an exception.
+- Only a request with the header `X-J87-Grant-Level: full` may run tools that are not read-only. A missing header, `read` or any other value only allows the read-only tools.
+
+Register the tools on the app's own MCP server in one line. Every tool description is self-contained, because the hub does not pass server instructions to clients. `Cms::mcpInstructions()` returns a summary for the server's `instructions`, which only helps clients that connect to the app directly, not through the hub:
+
+```php
+use J87NL\Cms\Facades\Cms;
+use Laravel\Mcp\Server;
+
+class SiteServer extends Server
+{
+    protected function boot(): void
+    {
+        $this->tools = [
+            ...$this->tools,
+            ...Cms::mcpTools(),
+        ];
+
+        $this->instructions = sprintf("%s\n\n%s", $this->instructions, Cms::mcpInstructions());
+    }
+}
+```
+
+`boot()` runs before every request is handled. Keep the server's own instructions in the `$instructions` property: an `#[Instructions]` attribute takes precedence over the property and would drop the CMS guidance.
+
+The app provides the rest of the hub's downstream contract, described in the hub's `docs/adding-an-app.md`:
+
+- an MCP endpoint at `/internal/mcp` that is only reachable on loopback (or WireGuard), for example `Mcp::web('/internal/mcp', SiteServer::class)`;
+- middleware that checks the hub's service token (`Authorization: Bearer …`, compared with `hash_equals`), and a named rate limiter for the route;
+- middleware that authenticates the `X-J87-Acting-User` header as the app's user on `tools/call` (`Auth::setUser()`), and refuses a missing or unknown user;
+- the CMS permissions mapped to the app's roles;
+- a `hub:notify-tools-changed` command that the deploy runs, so the hub syncs the tool list.
+
 ## Configuration
 
 See [`config/cms.php`](config/cms.php). The most relevant keys:

@@ -2,19 +2,26 @@
 
 declare(strict_types=1);
 
+use Illuminate\Foundation\Auth\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Gate;
 use J87NL\Cms\Actions\SaveBlock;
 use J87NL\Cms\Actions\SavePage;
 use J87NL\Cms\Actions\UploadMedia;
 use J87NL\Cms\Blocks\BlockRegistry;
+use J87NL\Cms\CmsPermission;
 use J87NL\Cms\Enums\PageStatus;
+use J87NL\Cms\Mcp\CmsTools;
 use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\MediaAsset;
 use J87NL\Cms\Models\Page;
 use J87NL\Cms\Models\Redirect;
 use J87NL\Cms\Tests\TestCase;
+use Orchestra\Testbench\Factories\UserFactory;
 
 pest()->extend(TestCase::class)->in('Feature');
+
+pest()->beforeEach(fn () => hubGrant(CmsTools::FULL_GRANT))->in('Feature/Mcp');
 
 /**
  * @param  array<string, mixed>  $attributes
@@ -56,5 +63,49 @@ function redirectTargets(): array
     return Redirect::query()
         ->orderBy('from_path')
         ->pluck('to', 'from_path')
+        ->all();
+}
+
+function cmsUser(CmsPermission ...$permissions): User
+{
+    $user = UserFactory::new()->create();
+    $granted = array_map(fn (CmsPermission $permission): string => $permission->value, $permissions);
+
+    Gate::before(fn (mixed $actor, string $ability): ?bool => $actor instanceof User && $actor->is($user) && in_array($ability, $granted, true) ? true : null);
+
+    return $user;
+}
+
+function hubGrant(?string $level): void
+{
+    if (is_null($level)) {
+        request()->headers->remove(CmsTools::GRANT_LEVEL_HEADER);
+
+        return;
+    }
+
+    request()->headers->set(CmsTools::GRANT_LEVEL_HEADER, $level);
+}
+
+function makeRedirect(string $from, string $to, int $statusCode = 301): Redirect
+{
+    return Redirect::query()
+        ->create([
+            'from_path' => $from,
+            'to' => $to,
+            'status_code' => $statusCode,
+        ]);
+}
+
+/**
+ * @return list<int>
+ */
+function pageBlockIds(Page $page): array
+{
+    return Block::query()
+        ->where('page_id', $page->id)
+        ->orderBy('sort_order')
+        ->orderBy('id')
+        ->pluck('id')
         ->all();
 }

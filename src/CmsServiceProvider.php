@@ -21,6 +21,7 @@ use J87NL\Cms\Blocks\Types\TextWithImageBlock;
 use J87NL\Cms\Cache\FlushPageCache;
 use J87NL\Cms\Console\PublishScheduledPages;
 use J87NL\Cms\Html\RichTextSanitizer;
+use J87NL\Cms\Mcp\BlockTypeSummary;
 use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\MediaAsset;
 use J87NL\Cms\Models\Menu;
@@ -78,6 +79,7 @@ class CmsServiceProvider extends ServiceProvider
         $this->app->singleton(SitemapRegistry::class, fn (Application $app): SitemapRegistry => (new SitemapRegistry($app))->contribute(PageSitemapContributor::class));
         $this->app->singleton(Cms::class);
         $this->app->singleton(RecordPathRedirects::class);
+        $this->app->scoped(BlockTypeSummary::class);
 
         $this->registerPermissions();
     }

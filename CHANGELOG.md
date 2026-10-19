@@ -4,6 +4,18 @@ All notable changes to this package are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.2.0]
+
+### Added
+
+- MCP tools on `laravel/mcp` for the J87 MCP hub: `pages_list`, `page_get`, `media_list`, `menu_items_list` and `redirects_list` to read, and `page_draft_create`, `page_update`, `block_add`, `block_update`, `block_remove`, `blocks_reorder`, `menu_item_save`, `redirect_save` and `redirect_delete` to write. Page and block writes only act on draft or unpublished pages without a planned publication, no tool publishes, every tool checks the acting user's CMS permission, and only the hub grant level `full` runs tools that are not read-only. `block_remove`, `menu_item_save` and `redirect_delete` are marked destructive.
+- `Cms::mcpTools()` to register the tools on the app's MCP server, and `Cms::mcpInstructions()` for clients that connect without the hub.
+- The `SaveMenuItem` and `ReorderBlocks` actions, and the `PageRules` and `RedirectRules` validation rules shared with the admin.
+
+### Changed
+
+- `laravel/mcp` `^0.7` is a required dependency.
+
 ## [0.1.0]
 
 First release, extracted from the j87.nl app.
@@ -29,5 +41,6 @@ First release, extracted from the j87.nl app.
 
 - Require `symfony/html-sanitizer` `^7.4.13|^8.0.13` for CVE-2026-45064, CVE-2026-45066, CVE-2026-45753, CVE-2026-48760 and CVE-2026-48761.
 
-[Unreleased]: https://github.com/J87NL/laravel-cms/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/J87NL/laravel-cms/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/J87NL/laravel-cms/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/J87NL/laravel-cms/releases/tag/v0.1.0

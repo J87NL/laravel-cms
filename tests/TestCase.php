@@ -9,8 +9,12 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use J87NL\Cms\CmsServiceProvider;
+use Laravel\Mcp\Server\McpServiceProvider;
 use Orchestra\Testbench\TestCase as BaseTestCase;
 use Spatie\MediaLibrary\MediaLibraryServiceProvider;
+use TranquilTools\FormBuilder\FormBuilderServiceProvider;
+
+use function Orchestra\Testbench\default_migration_path;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -31,6 +35,8 @@ abstract class TestCase extends BaseTestCase
     {
         return [
             MediaLibraryServiceProvider::class,
+            McpServiceProvider::class,
+            FormBuilderServiceProvider::class,
             CmsServiceProvider::class,
         ];
     }
@@ -53,5 +59,9 @@ abstract class TestCase extends BaseTestCase
         $migration = include sprintf('%s/database/migrations/create_media_table.php.stub', $mediaLibrary);
 
         $migration->up();
+
+        $users = include sprintf('%s/0001_01_01_000000_testbench_create_users_table.php', default_migration_path());
+
+        $users->up();
     }
 }

@@ -1,0 +1,223 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Support\Facades\Route;
+use J87NL\Cms\CmsPermission;
+use J87NL\Cms\Enums\PageStatus;
+use J87NL\Cms\Facades\Cms;
+use J87NL\Cms\Mcp\CmsTools;
+use J87NL\Cms\Mcp\Tools\BlockAddTool;
+use J87NL\Cms\Mcp\Tools\BlockRemoveTool;
+use J87NL\Cms\Mcp\Tools\BlocksReorderTool;
+use J87NL\Cms\Mcp\Tools\BlockUpdateTool;
+use J87NL\Cms\Mcp\Tools\MediaListTool;
+use J87NL\Cms\Mcp\Tools\MenuItemSaveTool;
+use J87NL\Cms\Mcp\Tools\MenuItemsListTool;
+use J87NL\Cms\Mcp\Tools\PageDraftCreateTool;
+use J87NL\Cms\Mcp\Tools\PageGetTool;
+use J87NL\Cms\Mcp\Tools\PagesListTool;
+use J87NL\Cms\Mcp\Tools\PageUpdateTool;
+use J87NL\Cms\Mcp\Tools\RedirectDeleteTool;
+use J87NL\Cms\Mcp\Tools\RedirectSaveTool;
+use J87NL\Cms\Mcp\Tools\RedirectsListTool;
+use J87NL\Cms\Models\Block;
+use J87NL\Cms\Models\MenuItem;
+use J87NL\Cms\Models\Page;
+use J87NL\Cms\Models\Redirect;
+use J87NL\Cms\Tests\Fixtures\Mcp\CmsTestServer;
+use Laravel\Mcp\Facades\Mcp;
+use Laravel\Mcp\Server\Tool;
+
+/**
+ * @return array<string, array{class-string<Tool>, CmsPermission, Closure(): array<string, mixed>}>
+ */
+function cmsWriteTools(): array
+{
+    return [
+        'page_draft_create' => [PageDraftCreateTool::class, CmsPermission::PagesEdit, fn (): array => ['title' => 'Nieuw']],
+        'page_update' => [PageUpdateTool::class, CmsPermission::PagesEdit, fn (): array => ['page_id' => makePage(['title' => 'Concept'], PageStatus::Draft)->id, 'title' => 'Ander']],
+        'block_add' => [BlockAddTool::class, CmsPermission::PagesEdit, fn (): array => ['page_id' => makePage(['title' => 'Concept'], PageStatus::Draft)->id, 'type' => 'rich_text', 'data' => ['html' => '<p>Hoi</p>']]],
+        'block_update' => [BlockUpdateTool::class, CmsPermission::PagesEdit, fn (): array => ['block_id' => addBlock(makePage(['title' => 'Concept'], PageStatus::Draft), 'rich_text', ['html' => '<p>Oud</p>'])->id, 'data' => ['html' => '<p>Nieuw</p>']]],
+        'block_remove' => [BlockRemoveTool::class, CmsPermission::PagesEdit, fn (): array => ['block_id' => addBlock(makePage(['title' => 'Concept'], PageStatus::Draft), 'rich_text', ['html' => '<p>Oud</p>'])->id]],
+        'blocks_reorder' => [BlocksReorderTool::class, CmsPermission::PagesEdit, function (): array {
+            $page = makePage(['title' => 'Concept'], PageStatus::Draft);
+            $first = addBlock($page, 'rich_text', ['html' => '<p>Een</p>']);
+            $second = addBlock($page, 'rich_text', ['html' => '<p>Twee</p>']);
+
+            return ['page_id' => $page->id, 'block_ids' => [$second->id, $first->id]];
+        }],
+        'menu_item_save' => [MenuItemSaveTool::class, CmsPermission::Menus, fn (): array => ['menu' => 'main', 'url' => '/contact', 'label' => 'Contact']],
+        'redirect_save' => [RedirectSaveTool::class, CmsPermission::Redirects, fn (): array => ['from_path' => '/oud', 'to' => '/nieuw']],
+        'redirect_delete' => [RedirectDeleteTool::class, CmsPermission::Redirects, fn (): array => ['redirect_id' => makeRedirect('oud', '/nieuw')->id]],
+    ];
+}
+
+/**
+ * @return array<string, array{class-string<Tool>, CmsPermission, Closure(): array<string, mixed>}>
+ */
+function cmsReadTools(): array
+{
+    return [
+        'pages_list' => [PagesListTool::class, CmsPermission::PagesEdit, fn (): array => []],
+        'page_get' => [PageGetTool::class, CmsPermission::PagesEdit, fn (): array => ['page_id' => makePage(['title' => 'Over'])->id]],
+        'media_list' => [MediaListTool::class, CmsPermission::Media, fn (): array => []],
+        'menu_items_list' => [MenuItemsListTool::class, CmsPermission::Menus, fn (): array => []],
+        'redirects_list' => [RedirectsListTool::class, CmsPermission::Redirects, fn (): array => []],
+    ];
+}
+
+/**
+ * @return array<string, int|string>
+ */
+function cmsContentCounts(): array
+{
+    $blocks = Block::query()
+        ->orderBy('sort_order')
+        ->orderBy('id')
+        ->get();
+
+    $pages = Page::query()
+        ->orderBy('id')
+        ->get();
+
+    return [
+        'pages' => $pages->count(),
+        'titles' => $pages->pluck('title')->implode('|'),
+        'blocks' => $blocks->pluck('id')->implode(','),
+        'block_data' => $blocks->map(fn (Block $block): string => (string) json_encode($block->data))->implode('|'),
+        'menu_items' => MenuItem::query()
+            ->count(),
+        'redirects' => Redirect::query()
+            ->count(),
+    ];
+}
+
+it('registers every CMS tool with explicit read-only and destructive hints', function (): void {
+    $annotations = collect(Cms::mcpTools())
+        ->mapWithKeys(fn (string $class): array => [app($class)->name() => app($class)->annotations()]);
+
+    $annotations->each(fn (array $hints, string $name) => expect($hints)->toHaveKeys(['readOnlyHint', 'destructiveHint'], $name));
+
+    expect($annotations->filter(fn (array $hints): bool => $hints['readOnlyHint'])->keys()->all())
+        ->toEqualCanonicalizing(['pages_list', 'page_get', 'media_list', 'menu_items_list', 'redirects_list'])
+        ->and($annotations->filter(fn (array $hints): bool => $hints['destructiveHint'])->keys()->all())
+        ->toEqualCanonicalizing(['block_remove', 'menu_item_save', 'redirect_delete']);
+});
+
+it('refuses every tool without an acting user', function (string $tool, CmsPermission $permission, Closure $arguments): void {
+    CmsTestServer::tool($tool, $arguments())
+        ->assertHasErrors(['No acting user is known']);
+})->with([
+    ...cmsReadTools(),
+    ...cmsWriteTools(),
+]);
+
+it('refuses every tool when the user lacks its CMS permission', function (string $tool, CmsPermission $permission, Closure $arguments): void {
+    $others = array_values(array_filter(CmsPermission::cases(), fn (CmsPermission $case): bool => $case !== $permission));
+    $input = $arguments();
+    $before = cmsContentCounts();
+
+    CmsTestServer::actingAs(cmsUser(...$others))
+        ->tool($tool, $input)
+        ->assertHasErrors([sprintf('lacks the CMS permission "%s"', $permission->value)]);
+
+    expect(cmsContentCounts())->toBe($before);
+})->with([
+    ...cmsReadTools(),
+    ...cmsWriteTools(),
+]);
+
+it('refuses every write tool unless the grant level is full, and changes nothing', function (string $tool, CmsPermission $permission, Closure $arguments, ?string $level): void {
+    $input = $arguments();
+    $before = cmsContentCounts();
+
+    hubGrant($level);
+
+    CmsTestServer::actingAs(cmsUser(...CmsPermission::cases()))
+        ->tool($tool, $input)
+        ->assertHasErrors(['grant for this app is read-only']);
+
+    expect(cmsContentCounts())->toBe($before);
+})->with(cmsWriteTools())->with([
+    'no header' => [null],
+    'read' => ['read'],
+    'unknown value' => ['admin'],
+]);
+
+it('runs read tools under a read grant', function (string $tool, CmsPermission $permission, Closure $arguments): void {
+    $input = $arguments();
+
+    hubGrant('read');
+
+    CmsTestServer::actingAs(cmsUser($permission))
+        ->tool($tool, $input)
+        ->assertOk();
+})->with(cmsReadTools());
+
+it('runs write tools under a full grant', function (string $tool, CmsPermission $permission, Closure $arguments): void {
+    $input = $arguments();
+
+    hubGrant('full');
+
+    CmsTestServer::actingAs(cmsUser($permission))
+        ->tool($tool, $input)
+        ->assertOk();
+})->with(cmsWriteTools());
+
+it('reads the grant level from the hub request over HTTP', function (): void {
+    Mcp::web('/internal/mcp', CmsTestServer::class);
+    Route::getRoutes()->refreshNameLookups();
+
+    $this->actingAs(cmsUser(CmsPermission::PagesEdit));
+
+    $call = fn (?string $level) => $this->postJson('/internal/mcp', [
+        'jsonrpc' => '2.0',
+        'id' => 3,
+        'method' => 'tools/call',
+        'params' => [
+            'name' => 'page_draft_create',
+            'arguments' => [
+                'title' => 'Via de hub',
+            ],
+        ],
+    ], [
+        'Accept' => 'application/json, text/event-stream',
+        ...(is_null($level) ? [] : [CmsTools::GRANT_LEVEL_HEADER => $level]),
+    ]);
+
+    $call(null)
+        ->assertOk()
+        ->assertJsonPath('result.isError', true);
+
+    $call('read')
+        ->assertOk()
+        ->assertJsonPath('result.isError', true);
+
+    expect(Page::query()
+        ->count())->toBe(0);
+
+    $call('full')
+        ->assertOk()
+        ->assertJsonPath('result.isError', false);
+
+    expect(Page::query()
+        ->sole()
+        ->status)->toBe(PageStatus::Draft);
+});
+
+it('lists every CMS tool over HTTP without an acting user', function (): void {
+    Mcp::web('/internal/mcp', CmsTestServer::class);
+    Route::getRoutes()->refreshNameLookups();
+
+    $this->postJson('/internal/mcp', [
+        'jsonrpc' => '2.0',
+        'id' => 1,
+        'method' => 'tools/list',
+        'params' => [],
+    ], [
+        'Accept' => 'application/json, text/event-stream',
+    ])
+        ->assertOk()
+        ->assertJsonCount(count(CmsTools::TOOLS), 'result.tools');
+});

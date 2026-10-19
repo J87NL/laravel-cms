@@ -28,4 +28,8 @@ return [
     'schedule_in_past' => 'Kies een moment in de toekomst.',
     'unpublish_before_publish' => 'Offline halen moet na het publiceren komen.',
     'invalid_profile_url' => 'Het adres :url is geen geldige link. Zet één volledig adres per regel, beginnend met https://.',
+    'menu_parent_invalid' => 'Kies als bovenliggend item een item op het hoogste niveau van hetzelfde menu, of geen.',
+    'menu_item_has_children' => 'Onder dit item staan andere items, dus het kan niet zelf onder een item staan.',
+    'block_order_incomplete' => 'Noem elk blok van de pagina precies één keer.',
+    'menu_label_required' => 'Vul een label in voor een link naar een adres.',
 ];

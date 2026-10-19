@@ -28,4 +28,8 @@ return [
     'schedule_in_past' => 'Choose a moment in the future.',
     'unpublish_before_publish' => 'Taking offline has to come after publishing.',
     'invalid_profile_url' => 'The address :url is not a valid link. Put one full address per line, starting with https://.',
+    'menu_parent_invalid' => 'Choose a top-level item of the same menu as the parent, or none.',
+    'menu_item_has_children' => 'This item has items below it and cannot be placed under another item.',
+    'block_order_incomplete' => 'List every block of the page exactly once.',
+    'menu_label_required' => 'Enter a label for a link to an address.',
 ];
