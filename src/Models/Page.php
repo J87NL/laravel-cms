@@ -21,6 +21,7 @@ use J87NL\Cms\Enums\PageStatus;
  * @property PageStatus $status
  * @property Carbon|null $publish_at
  * @property Carbon|null $unpublish_at
+ * @property string|null $schedule_error
  * @property bool $is_home
  * @property int $sort_order
  * @property string|null $meta_title

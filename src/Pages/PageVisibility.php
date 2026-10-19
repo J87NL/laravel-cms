@@ -18,6 +18,31 @@ class PageVisibility
         return $this->hiddenAncestorPaths([$page->path]) === [];
     }
 
+    public function hasPublicAncestry(?int $parentId): bool
+    {
+        $visited = [];
+
+        while (! is_null($parentId) && ! in_array($parentId, $visited, true)) {
+            $visited[] = $parentId;
+
+            $parent = Page::query()
+                ->select([
+                    'id',
+                    'parent_id',
+                    'status',
+                ])
+                ->find($parentId);
+
+            if (is_null($parent) || ! $parent->isPublished()) {
+                return false;
+            }
+
+            $parentId = $parent->parent_id;
+        }
+
+        return true;
+    }
+
     /**
      * @param  list<string>  $paths
      * @return list<string>

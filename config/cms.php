@@ -53,6 +53,10 @@ return [
 
     'security_headers' => [
         'enabled' => true,
+        'hsts' => true,
+        'nosniff' => true,
+        'referrer_policy' => true,
+        'permissions_policy' => true,
         'hsts_max_age' => 31536000,
         'csp' => [],
     ],
@@ -60,6 +64,7 @@ return [
     'contact' => [
         'recipient' => null,
         'per_hour' => 5,
+        'global_per_hour' => 30,
         'min_seconds' => 3,
         'max_seconds' => 172800,
     ],

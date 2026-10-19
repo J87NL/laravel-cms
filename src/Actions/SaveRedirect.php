@@ -45,9 +45,7 @@ class SaveRedirect
     public function forPathChange(string $oldPath, string $newPath): void
     {
         DB::transaction(function () use ($oldPath, $newPath): void {
-            Redirect::query()
-                ->where('from_path', $newPath)
-                ->delete();
+            $this->releasePath($newPath);
 
             if ($oldPath === '' || $oldPath === $newPath) {
                 return;
@@ -67,6 +65,13 @@ class SaveRedirect
 
             $this->collapseChainsInto($redirect);
         });
+    }
+
+    public function releasePath(string $path): void
+    {
+        Redirect::query()
+            ->where('from_path', $path)
+            ->delete();
     }
 
     private function assertUsableFrom(Redirect $redirect, string $fromPath): void

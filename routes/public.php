@@ -19,7 +19,7 @@ Route::middleware([
         ->name(PreviewController::ROUTE);
 
     Route::post('cms/contact/{block}', [ContactFormController::class, 'store'])
-        ->middleware('throttle:cms-contact')
+        ->middleware('throttle:30,1')
         ->name('cms.contact');
 
     Route::middleware(CachePublicResponses::class)->group(function (): void {

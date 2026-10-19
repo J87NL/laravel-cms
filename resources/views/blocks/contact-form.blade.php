@@ -37,7 +37,7 @@
                 <textarea id="{{ $anchor }}-message" name="message" rows="6" maxlength="5000" required>{{ $old['message'] ?? '' }}</textarea>
             </p>
 
-            <p class="cms-contact__trap" aria-hidden="true" style="position: absolute; left: -10000px;">
+            <p class="cms-contact__trap" aria-hidden="true">
                 <label for="{{ $anchor }}-website">{{ __('cms::blocks.contact_form.trap') }}</label>
                 <input id="{{ $anchor }}-website" type="text" name="{{ \J87NL\Cms\Contact\ContactFormGuard::HONEYPOT }}" tabindex="-1" autocomplete="off">
             </p>

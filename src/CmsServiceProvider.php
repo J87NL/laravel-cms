@@ -4,13 +4,10 @@ declare(strict_types=1);
 
 namespace J87NL\Cms;
 
-use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Blade;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use J87NL\Cms\Blocks\BlockRegistry;
 use J87NL\Cms\Blocks\Types\CallToActionBlock;
@@ -80,6 +77,7 @@ class CmsServiceProvider extends ServiceProvider
         });
         $this->app->singleton(SitemapRegistry::class, fn (Application $app): SitemapRegistry => (new SitemapRegistry($app))->contribute(PageSitemapContributor::class));
         $this->app->singleton(Cms::class);
+        $this->app->singleton(RecordPathRedirects::class);
 
         $this->registerPermissions();
     }
@@ -97,8 +95,6 @@ class CmsServiceProvider extends ServiceProvider
         foreach (self::CACHED_CONTENT_MODELS as $model) {
             $model::observe(FlushPageCache::class);
         }
-
-        RateLimiter::for('cms-contact', fn (Request $request): Limit => Limit::perHour((int) config('cms.contact.per_hour', 5))->by((string) $request->ip()));
 
         if (config('cms.routes.enabled', true)) {
             $this->loadRoutesFrom(__DIR__.'/../routes/public.php');

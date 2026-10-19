@@ -133,6 +133,11 @@ class DatesBlock extends AbstractBlockType implements HasJsonLd
     public function jsonLd(array $data): array
     {
         $location = $this->location($data);
+
+        if (is_null($location)) {
+            return [];
+        }
+
         $events = [];
 
         foreach ($this->items($data) as $item) {
@@ -143,14 +148,11 @@ class DatesBlock extends AbstractBlockType implements HasJsonLd
                 'endDate' => $item['date'],
                 'eventStatus' => 'https://schema.org/EventScheduled',
                 'eventAttendanceMode' => 'https://schema.org/OfflineEventAttendanceMode',
+                'location' => $location,
             ];
 
             if ($item['description'] !== '') {
                 $event['description'] = $item['description'];
-            }
-
-            if (! is_null($location)) {
-                $event['location'] = $location;
             }
 
             $events[] = $event;

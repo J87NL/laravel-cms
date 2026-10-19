@@ -16,7 +16,10 @@ class PreviewController extends Controller
 
     public function show(string $page, PageResponse $pageResponse): Response
     {
-        return $pageResponse->make(Page::query()->findOrFail((int) $page), preview: true);
+        $preview = Page::query()
+            ->findOrFail((int) $page);
+
+        return $pageResponse->make($preview, preview: true);
     }
 
     public static function url(Page $page): string

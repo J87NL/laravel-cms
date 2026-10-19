@@ -2,10 +2,14 @@
 
 declare(strict_types=1);
 
+use Illuminate\Http\Request;
 use J87NL\Cms\Actions\ChangePageStatus;
 use J87NL\Cms\Actions\SaveSiteSettings;
+use J87NL\Cms\Cache\PageCache;
 use J87NL\Cms\Enums\PageStatus;
+use J87NL\Cms\Http\Middleware\CachePublicResponses;
 use J87NL\Cms\Models\Menu;
+use Symfony\Component\HttpFoundation\Response;
 
 beforeEach(function (): void {
     $this->page = makePage([
@@ -70,4 +74,32 @@ test('the cache can be switched off', function (): void {
 
     $this->get('/about')->assertOk()->assertHeaderMissing('X-Cms-Cache');
     $this->get('/about')->assertOk()->assertHeaderMissing('X-Cms-Cache');
+});
+
+test('a head request never stores an empty body for the following get', function (): void {
+    $this->call('HEAD', '/about')->assertOk();
+
+    $this->get('/about')
+        ->assertOk()
+        ->assertHeader('X-Cms-Cache', 'miss')
+        ->assertSee('First version', false);
+
+    $this->get('/about')
+        ->assertHeader('X-Cms-Cache', 'hit')
+        ->assertSee('First version', false);
+
+    $this->call('HEAD', '/about')->assertOk()->assertHeader('X-Cms-Cache', 'hit');
+});
+
+test('a response rendered while the cache is flushed is not served after the flush', function (): void {
+    app(CachePublicResponses::class)->handle(Request::create('/about'), function (): Response {
+        app(PageCache::class)->flush();
+
+        return new Response('Stale version');
+    });
+
+    $this->get('/about')
+        ->assertHeader('X-Cms-Cache', 'miss')
+        ->assertSee('First version', false)
+        ->assertDontSee('Stale version');
 });

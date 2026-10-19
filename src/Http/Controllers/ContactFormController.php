@@ -11,7 +11,9 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\MessageBag;
+use J87NL\Cms\Blocks\BlockRegistry;
 use J87NL\Cms\Contact\ContactFormGuard;
+use J87NL\Cms\Contact\ContactFormLimiter;
 use J87NL\Cms\Contact\ContactFormState;
 use J87NL\Cms\Mail\ContactFormSubmitted;
 use J87NL\Cms\Models\Block;
@@ -26,6 +28,8 @@ class ContactFormController extends Controller
 
     public function __construct(
         private readonly ContactFormGuard $guard,
+        private readonly ContactFormLimiter $limiter,
+        private readonly BlockRegistry $registry,
         private readonly PageVisibility $visibility,
         private readonly PageResponse $pageResponse,
     ) {}
@@ -40,11 +44,17 @@ class ContactFormController extends Controller
 
         $page = $contactBlock?->page;
 
-        if (is_null($contactBlock) || ! $page instanceof Page || ! $this->visibility->isPublic($page)) {
+        if (is_null($contactBlock) || ! $this->registry->has(self::BLOCK_TYPE) || ! $page instanceof Page || ! $this->visibility->isPublic($page)) {
             abort(404);
         }
 
+        if ($this->limiter->tooManyFromAddress($request)) {
+            return $this->tooMany($request, $page, $contactBlock, $this->limiter->retryAfterForAddress($request));
+        }
+
         if (! $this->guard->looksHuman($request, $contactBlock->id)) {
+            $this->limiter->hitAddress($request);
+
             return $this->sent($page, $contactBlock);
         }
 
@@ -71,9 +81,13 @@ class ContactFormController extends Controller
             ]), 503);
         }
 
+        if (! $this->limiter->claimOverall()) {
+            return $this->tooMany($request, $page, $contactBlock, $this->limiter->retryAfterOverall());
+        }
+
         $validated = $validator->validated();
 
-        Mail::to($recipient)->send(new ContactFormSubmitted(
+        Mail::to($recipient)->queue(new ContactFormSubmitted(
             senderName: trim((string) $validated['name']),
             senderEmail: trim((string) $validated['email']),
             body: trim((string) $validated['message']),
@@ -82,7 +96,16 @@ class ContactFormController extends Controller
             pageUrl: url($page->url()),
         ));
 
+        $this->limiter->hitAddress($request);
+
         return $this->sent($page, $contactBlock);
+    }
+
+    private function tooMany(Request $request, Page $page, Block $block, int $retryAfter): Response
+    {
+        return $this->failed($request, $page, $block, new MessageBag([
+            'form' => __('cms::blocks.contact_form.too_many'),
+        ]), 429)->header('Retry-After', (string) $retryAfter);
     }
 
     private function sent(Page $page, Block $block): RedirectResponse

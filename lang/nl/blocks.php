@@ -96,6 +96,7 @@ return [
         'privacy_link' => 'privacyverklaring',
         'expired' => 'Het formulier is verlopen. Probeer het nog eens.',
         'unavailable' => 'Het formulier kan op dit moment geen berichten versturen. Probeer het later nog eens.',
+        'too_many' => 'Er zijn het afgelopen uur te veel berichten verstuurd. Probeer het later nog eens.',
         'mail_subject' => 'Bericht via :site: :page',
         'mail_intro' => 'Bericht via het contactformulier op :url',
     ],

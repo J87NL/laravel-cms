@@ -2,11 +2,18 @@
 
 declare(strict_types=1);
 
-use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\Exceptions;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use J87NL\Cms\Actions\ChangePageStatus;
+use J87NL\Cms\Actions\MakeHomePage;
+use J87NL\Cms\Actions\RecordRevision;
 use J87NL\Cms\Actions\SchedulePage;
 use J87NL\Cms\Enums\PageStatus;
 use J87NL\Cms\Http\Controllers\PreviewController;
+use J87NL\Cms\Models\Page;
+use J87NL\Cms\Pages\HomePageLock;
+use J87NL\Cms\Pages\PageVisibility;
 
 test('the scheduler publishes and unpublishes pages when their moment has passed', function (): void {
     makePage([
@@ -64,12 +71,124 @@ test('a schedule cannot lie in the past, end before it starts or take the home p
     'home' => [fn ($home, $draft) => app(SchedulePage::class)->handle($home, null, now()->addDay())],
 ])->throws(ValidationException::class);
 
-test('the scheduler runs every minute', function (): void {
-    $events = collect(app(Schedule::class)->events())
-        ->filter(fn ($event): bool => str_contains((string) $event->command, 'cms:publish-scheduled'));
+test('a refused scheduled change keeps its moment and tells the editor why', function (): void {
+    Log::spy();
 
-    expect($events)->toHaveCount(1)
-        ->and($events->first()->expression)->toBe('* * * * *');
+    makePage([
+        'title' => 'Welcome',
+        'slug' => 'welcome',
+    ], home: true);
+    $page = makePage([
+        'title' => 'Ending',
+        'slug' => 'ending',
+    ]);
+
+    app(SchedulePage::class)->handle($page, null, now()->addHour());
+    app(MakeHomePage::class)->handle($page->refresh());
+
+    $this->travel(61)->minutes();
+    $this->artisan('cms:publish-scheduled')->assertSuccessful();
+    $this->artisan('cms:publish-scheduled')->assertSuccessful();
+
+    expect($page->refresh())
+        ->status->toBe(PageStatus::Published)
+        ->unpublish_at->not->toBeNull()
+        ->schedule_error->toBe(__('cms::validation.unpublish_home'));
+
+    Log::shouldHaveReceived('warning')->once();
+
+    app(SchedulePage::class)->handle($page, null, null);
+
+    expect($page->refresh()->schedule_error)->toBeNull();
+});
+
+test('refusals in both directions are saved once and not rewritten every run', function (): void {
+    Log::spy();
+
+    makePage([
+        'title' => 'Welcome',
+        'slug' => 'welcome',
+    ], home: true);
+    $page = makePage([
+        'title' => 'Ending',
+        'slug' => 'ending',
+    ]);
+
+    $refusing = new class(app(RecordRevision::class), app(HomePageLock::class), app(PageVisibility::class)) extends ChangePageStatus
+    {
+        public function handle(Page $page, PageStatus $status, ?int $userId): void
+        {
+            throw ValidationException::withMessages([
+                'page' => sprintf('No %s.', $status->value),
+            ]);
+        }
+    };
+    $this->app->instance(ChangePageStatus::class, $refusing);
+
+    $page->publish_at = now()->addMinute();
+    $page->unpublish_at = now()->addMinutes(2);
+    $page->saveQuietly();
+
+    $this->travel(3)->minutes();
+    $this->artisan('cms:publish-scheduled')->assertSuccessful();
+
+    $updatedAt = $page->refresh()->updated_at;
+
+    $this->travel(1)->minutes();
+    $this->artisan('cms:publish-scheduled')->assertSuccessful();
+
+    expect($page->refresh())
+        ->schedule_error->toBe('No published. No unpublished.')
+        ->updated_at->toEqual($updatedAt);
+
+    Log::shouldHaveReceived('warning')->once();
+});
+
+test('one failing page does not stop the others, fails the run and is reported once', function (): void {
+    makePage([
+        'title' => 'Welcome',
+        'slug' => 'welcome',
+    ], home: true);
+    $broken = makePage([
+        'title' => 'Broken',
+        'slug' => 'broken',
+    ], PageStatus::Draft);
+    $fine = makePage([
+        'title' => 'Fine',
+        'slug' => 'fine',
+    ], PageStatus::Draft);
+
+    app(SchedulePage::class)->handle($broken, now()->addHour(), null);
+    app(SchedulePage::class)->handle($fine, now()->addHour(), null);
+
+    $failing = new class(app(RecordRevision::class), app(HomePageLock::class), app(PageVisibility::class)) extends ChangePageStatus
+    {
+        public int $failFor = 0;
+
+        public function handle(Page $page, PageStatus $status, ?int $userId): void
+        {
+            if ($page->id === $this->failFor) {
+                throw new RuntimeException('Database hiccup');
+            }
+
+            parent::handle($page, $status, $userId);
+        }
+    };
+    $failing->failFor = $broken->id;
+    $this->app->instance(ChangePageStatus::class, $failing);
+
+    Exceptions::fake();
+
+    $this->travel(61)->minutes();
+    $this->artisan('cms:publish-scheduled')->assertFailed();
+    $this->artisan('cms:publish-scheduled')->assertFailed();
+
+    Exceptions::assertReportedCount(1);
+
+    expect($broken->refresh())
+        ->status->toBe(PageStatus::Draft)
+        ->publish_at->not->toBeNull()
+        ->and($fine->refresh()->status)->toBe(PageStatus::Published);
 });
 
 test('a signed preview renders a draft without letting it be indexed', function (): void {

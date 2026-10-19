@@ -32,7 +32,8 @@ class CachePublicResponses
             return $response;
         }
 
-        $cached = $this->cache->get($request);
+        $version = $this->cache->version();
+        $cached = $this->cache->get($request, $version);
 
         if (! is_null($cached)) {
             $cached->headers->set(self::HEADER, 'hit');
@@ -42,7 +43,7 @@ class CachePublicResponses
 
         $response = $next($request);
 
-        if ($this->cache->put($request, $response)) {
+        if ($this->cache->put($request, $response, $version)) {
             $response->headers->set(self::HEADER, 'miss');
         }
 

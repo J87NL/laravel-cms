@@ -6,6 +6,7 @@ namespace J87NL\Cms\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
 class AddSecurityHeaders
@@ -24,22 +25,36 @@ class AddSecurityHeaders
         $headers = $response->headers;
 
         $headers->set('Content-Security-Policy', $this->policy($response));
-        $headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
-        $headers->set('X-Content-Type-Options', 'nosniff');
-        $headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), interest-cohort=()');
 
-        if ($request->isSecure()) {
+        if ($this->switchedOn('referrer_policy')) {
+            $headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
+        }
+
+        if ($this->switchedOn('nosniff')) {
+            $headers->set('X-Content-Type-Options', 'nosniff');
+        }
+
+        if ($this->switchedOn('permissions_policy')) {
+            $headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), interest-cohort=()');
+        }
+
+        if ($this->switchedOn('hsts') && $request->isSecure()) {
             $headers->set('Strict-Transport-Security', sprintf('max-age=%d', (int) config('cms.security_headers.hsts_max_age', 31536000)));
         }
 
         return $response;
     }
 
+    private function switchedOn(string $header): bool
+    {
+        return (bool) config(sprintf('cms.security_headers.%s', $header), true);
+    }
+
     private function policy(Response $response): string
     {
         $directives = [
             'default-src' => ["'self'"],
-            'img-src' => ["'self'", 'data:'],
+            'img-src' => ["'self'"],
             'style-src' => ["'self'"],
             'style-src-attr' => ["'unsafe-inline'"],
             'font-src' => ["'self'"],
@@ -54,16 +69,13 @@ class AddSecurityHeaders
         $extra = config('cms.security_headers.csp', []);
 
         foreach (is_array($extra) ? $extra : [] as $directive => $sources) {
-            $directives[(string) $directive] = array_values(array_unique([
-                ...array_diff($directives[(string) $directive] ?? [], ["'none'"]),
-                ...array_map('strval', (array) $sources),
-            ]));
+            $directives = $this->allow($directives, (string) $directive, array_values(array_map('strval', (array) $sources)));
         }
 
-        $embedHosts = $this->embedHosts($response);
+        $frameSources = array_map(fn (string $host): string => sprintf('https://%s', $host), $this->embedHosts($response));
 
-        if ($embedHosts !== []) {
-            $directives['frame-src'] = array_map(fn (string $host): string => sprintf('https://%s', $host), $embedHosts);
+        if ($frameSources !== []) {
+            $directives = $this->allow($directives, 'frame-src', $frameSources);
         }
 
         return implode('; ', array_map(
@@ -71,6 +83,21 @@ class AddSecurityHeaders
             array_keys($directives),
             $directives,
         ));
+    }
+
+    /**
+     * @param  array<string, list<string>>  $directives
+     * @param  list<string>  $sources
+     * @return array<string, list<string>>
+     */
+    private function allow(array $directives, string $directive, array $sources): array
+    {
+        $directives[$directive] = array_values(array_unique([
+            ...array_diff($directives[$directive] ?? [], ["'none'"]),
+            ...$sources,
+        ]));
+
+        return $directives;
     }
 
     /**
@@ -84,14 +111,18 @@ class AddSecurityHeaders
             return [];
         }
 
-        $hosts = [];
+        $allowed = [];
 
         foreach ((array) config('cms.embeds', []) as $embed) {
             foreach ((array) ($embed['hosts'] ?? []) as $host) {
-                $hosts[] = (string) $host;
+                $allowed[] = Str::lower((string) $host);
             }
         }
 
-        return array_values(array_unique($hosts));
+        preg_match_all('~<iframe\b[^>]*\bsrc="https://([^/"?#]+)~i', $content, $matches);
+
+        $used = array_map(fn (string $host): string => Str::lower(html_entity_decode($host)), $matches[1]);
+
+        return array_values(array_unique(array_intersect($used, $allowed)));
     }
 }

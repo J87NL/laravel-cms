@@ -157,6 +157,27 @@ test('dates blocks emit events with their location', function (): void {
     ]);
 });
 
+test('dates blocks without a location emit no events', function (): void {
+    $page = makePage([
+        'title' => 'Market',
+        'slug' => 'market',
+    ]);
+
+    addBlock($page, 'dates', [
+        'title' => 'Dates',
+        'items' => [
+            [
+                'date' => '2027-05-01',
+                'title' => 'Spring market',
+            ],
+        ],
+    ]);
+
+    $response = $this->get('/market')->assertOk()->assertSee('Spring market');
+
+    expect(nodesOfType(jsonLdGraph((string) $response->getContent()), 'Event'))->toBeEmpty();
+});
+
 test('json-ld cannot break out of its script tag', function (): void {
     makePage([
         'title' => '</script><script>alert(1)</script>',
@@ -172,3 +193,19 @@ test('json-ld cannot break out of its script tag', function (): void {
 test('the not found page is not indexed', function (): void {
     $this->get('/missing')->assertSee('<meta name="robots" content="noindex">', false);
 });
+
+test('og:locale is a valid language and territory pair', function (string $locale, string $expected): void {
+    config()->set('app.locale', $locale);
+
+    makePage([
+        'title' => 'About',
+        'slug' => 'about',
+    ]);
+
+    $this->get('/about')->assertSee(sprintf('<meta property="og:locale" content="%s">', $expected), false);
+})->with([
+    'dutch' => ['nl', 'nl_NL'],
+    'english' => ['en', 'en_US'],
+    'with territory' => ['en-gb', 'en_GB'],
+    'unknown' => ['xx', 'en_US'],
+]);

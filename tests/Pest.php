@@ -11,6 +11,7 @@ use J87NL\Cms\Enums\PageStatus;
 use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\MediaAsset;
 use J87NL\Cms\Models\Page;
+use J87NL\Cms\Models\Redirect;
 use J87NL\Cms\Tests\TestCase;
 
 pest()->extend(TestCase::class)->in('Feature');
@@ -45,4 +46,15 @@ function uploadImage(int $width = 2000, int $height = 1000, string $alt = 'A pho
     return app(UploadMedia::class)->handle(UploadedFile::fake()->image('photo.jpg', $width, $height), [
         'alt' => $alt,
     ]);
+}
+
+/**
+ * @return array<string, string>
+ */
+function redirectTargets(): array
+{
+    return Redirect::query()
+        ->orderBy('from_path')
+        ->pluck('to', 'from_path')
+        ->all();
 }

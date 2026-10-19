@@ -67,6 +67,16 @@ A block type implements `J87NL\Cms\Blocks\BlockType` (or extends `AbstractBlockT
 
 Permissions are pushed into the config key named by `cms.permissions_config_key`, so the app can map them to its roles: `cms.pages.edit`, `cms.pages.publish`, `cms.menus`, `cms.media`, `cms.redirects` and `cms.settings`.
 
+### Public styles
+
+The package ships no CSS. The contact form hides its honeypot field with the class `cms-contact__trap`; your site stylesheet must hide it, for example:
+
+```css
+.cms-contact__trap { position: absolute; left: -10000px; }
+```
+
+The image focal point is an inline `object-position` style, so the Content-Security-Policy allows `style-src-attr 'unsafe-inline'`.
+
 ## Configuration
 
 See [`config/cms.php`](config/cms.php). The most relevant keys:

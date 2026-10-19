@@ -28,6 +28,7 @@ class SchedulePage
 
         $page->publish_at = $publishAt;
         $page->unpublish_at = $unpublishAt;
+        $page->schedule_error = null;
         $page->save();
     }
 

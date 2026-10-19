@@ -17,6 +17,30 @@ class PageSeo
 {
     public const int DESCRIPTION_LENGTH = 160;
 
+    private const string FALLBACK_OPEN_GRAPH_LOCALE = 'en_US';
+
+    /**
+     * @var array<string, string>
+     */
+    private const array OPEN_GRAPH_LOCALES = [
+        'cs' => 'cs_CZ',
+        'da' => 'da_DK',
+        'de' => 'de_DE',
+        'el' => 'el_GR',
+        'en' => 'en_US',
+        'es' => 'es_ES',
+        'fr' => 'fr_FR',
+        'it' => 'it_IT',
+        'ja' => 'ja_JP',
+        'nb' => 'nb_NO',
+        'nl' => 'nl_NL',
+        'pl' => 'pl_PL',
+        'pt' => 'pt_PT',
+        'sv' => 'sv_SE',
+        'uk' => 'uk_UA',
+        'zh' => 'zh_CN',
+    ];
+
     public function __construct(
         private readonly BlockRegistry $registry,
     ) {}
@@ -294,8 +318,14 @@ class PageSeo
 
     private function openGraphLocale(): string
     {
-        $locale = str_replace('-', '_', (string) config('app.locale'));
+        $locale = str_replace('-', '_', trim((string) config('app.locale')));
 
-        return str_contains($locale, '_') ? $locale : sprintf('%s_%s', Str::lower($locale), Str::upper($locale));
+        if (preg_match('/^([a-z]{2,3})_([a-z]{2})$/i', $locale, $parts) === 1) {
+            return sprintf('%s_%s', Str::lower($parts[1]), Str::upper($parts[2]));
+        }
+
+        $language = Str::lower($locale);
+
+        return self::OPEN_GRAPH_LOCALES[$language] ?? self::FALLBACK_OPEN_GRAPH_LOCALE;
     }
 }

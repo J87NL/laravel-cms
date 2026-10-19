@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Mail\MailManager;
 use Illuminate\Support\Facades\Mail;
 use J87NL\Cms\Actions\SaveSiteSettings;
 use J87NL\Cms\Contact\ContactFormGuard;
@@ -68,7 +69,7 @@ test('a submission mails the recipient with the visitor as reply-to and sets no 
 
     expect($response->headers->getCookies())->toBeEmpty();
 
-    Mail::assertSent(ContactFormSubmitted::class, fn (ContactFormSubmitted $mail): bool => $mail->hasTo('contact@j87.nl')
+    Mail::assertQueued(ContactFormSubmitted::class, fn (ContactFormSubmitted $mail): bool => $mail->hasTo('contact@j87.nl')
         && $mail->hasReplyTo('visitor@example.org', 'Visitor')
         && $mail->body === 'Hello there');
 
@@ -85,14 +86,14 @@ test('invalid input shows the errors and keeps the input', function (): void {
         ->assertSee('value="Visitor"', false)
         ->assertSee('Hello there');
 
-    Mail::assertNothingSent();
+    Mail::assertNothingOutgoing();
 });
 
 test('bots filling the honeypot, posting too fast or forging the token get no mail sent', function (Closure $submission): void {
     $this->post(route('cms.contact', ['block' => $this->block->id]), $submission($this->block))
         ->assertStatus(303);
 
-    Mail::assertNothingSent();
+    Mail::assertNothingOutgoing();
 })->with([
     'honeypot' => [fn (Block $block) => contactSubmission($block, [ContactFormGuard::HONEYPOT => 'https://spam.example'])],
     'too fast' => [fn (Block $block) => contactSubmission($block, [ContactFormGuard::TIMESTAMP => app(ContactFormGuard::class)->token($block->id)])],
@@ -105,7 +106,117 @@ test('submissions are rate limited per address', function (): void {
         $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))->assertStatus(303);
     }
 
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))
+        ->assertStatus(429)
+        ->assertHeader('Retry-After')
+        ->assertSee(__('cms::blocks.contact_form.too_many'));
+
+    Mail::assertQueuedCount(5);
+});
+
+test('typos do not count toward the limit but bot submissions do', function (): void {
+    foreach (range(1, 6) as $attempt) {
+        $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, [
+            'email' => 'typo',
+        ]))->assertStatus(422);
+    }
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))->assertStatus(303);
+
+    foreach (range(1, 4) as $attempt) {
+        $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, [
+            ContactFormGuard::HONEYPOT => 'https://spam.example',
+        ]))->assertStatus(303);
+    }
+
     $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))->assertStatus(429);
+
+    Mail::assertQueuedCount(1);
+});
+
+test('a global hourly cap stops mail from many addresses', function (): void {
+    config()->set('cms.contact.global_per_hour', 3);
+
+    foreach (range(1, 3) as $attempt) {
+        $this->withServerVariables(['REMOTE_ADDR' => sprintf('10.0.0.%d', $attempt)])
+            ->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))
+            ->assertStatus(303);
+    }
+
+    $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.99'])
+        ->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))
+        ->assertStatus(429)
+        ->assertHeader('Retry-After')
+        ->assertSee(__('cms::blocks.contact_form.too_many'));
+
+    Mail::assertQueuedCount(3);
+
+    $this->travel(61)->minutes();
+
+    $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.99'])
+        ->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))
+        ->assertStatus(303);
+});
+
+test('a flood of invalid posts is still bounded per minute', function (): void {
+    foreach (range(1, 30) as $attempt) {
+        $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, [
+            'email' => 'typo',
+        ]))->assertStatus(422);
+    }
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))->assertStatus(429);
+
+    $submission = contactSubmission($this->block);
+
+    $this->travel(61)->seconds();
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), $submission)->assertStatus(303);
+});
+
+test('a disabled contact block type accepts no submissions', function (): void {
+    config()->set('cms.blocks.disabled', ['contact_form']);
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))->assertNotFound();
+
+    Mail::assertNothingOutgoing();
+});
+
+test('a hidden contact block accepts no submissions', function (): void {
+    $this->block->is_visible = false;
+    $this->block->save();
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))->assertNotFound();
+
+    Mail::assertNothingOutgoing();
+});
+
+test('the plain text mail keeps quotes and ampersands and its headers stay on one line', function (): void {
+    $mailer = (new MailManager(app()))->mailer('array');
+
+    $mailer->to('contact@j87.nl')->send(new ContactFormSubmitted(
+        senderName: "Jan & Piet\r\nBcc: evil@example.org",
+        senderEmail: 'visitor@example.org',
+        body: "It's <b>Tom</b> & Jerry",
+        siteName: "Johan's site",
+        pageTitle: "Contact\r\nBcc: evil@example.org",
+        pageUrl: 'https://j87.nl/contact',
+    ));
+
+    $message = $mailer->getSymfonyTransport()->messages()->first()->getOriginalMessage();
+    $headers = $message->getHeaders()->toString();
+
+    expect($message->getTextBody())
+        ->toContain("It's <b>Tom</b> & Jerry")
+        ->toContain('Jan & Piet')
+        ->not->toContain('&amp;')
+        ->not->toContain('&#039;')
+        ->and($headers)->not->toMatch('/^Bcc:/mi')
+        ->and($message->getSubject())->toBe(__('cms::blocks.contact_form.mail_subject', [
+            'site' => "Johan's site",
+            'page' => 'Contact Bcc: evil@example.org',
+        ]))
+        ->and($message->getReplyTo()[0]->getName())->toBe('Jan & Piet Bcc: evil@example.org');
 });
 
 test('only visible contact blocks on public pages accept submissions', function (): void {
@@ -129,5 +240,5 @@ test('without a recipient the form says it cannot send', function (): void {
         ->assertStatus(503)
         ->assertSee(__('cms::blocks.contact_form.unavailable'));
 
-    Mail::assertNothingSent();
+    Mail::assertNothingOutgoing();
 });

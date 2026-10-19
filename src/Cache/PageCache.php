@@ -32,16 +32,16 @@ class PageCache
 
     public function cacheable(Request $request): bool
     {
-        if (! $this->enabled() || ! $request->isMethodCacheable() || $request->getQueryString() !== null) {
+        if (! $this->enabled() || ! $request->isMethodCacheable() || ! is_null($request->getQueryString())) {
             return false;
         }
 
         return ! $request->cookies->has((string) config('session.cookie'));
     }
 
-    public function get(Request $request): ?Response
+    public function get(Request $request, int $version): ?Response
     {
-        $cached = $this->store()->get($this->key($request));
+        $cached = $this->store()->get($this->key($request, $version));
 
         if (! is_array($cached) || ! is_string($cached['content'] ?? null) || ! is_array($cached['headers'] ?? null)) {
             return null;
@@ -50,8 +50,12 @@ class PageCache
         return new Response($cached['content'], (int) ($cached['status'] ?? 200), $cached['headers']);
     }
 
-    public function put(Request $request, Response $response): bool
+    public function put(Request $request, Response $response, int $version): bool
     {
+        if (! $request->isMethod('GET')) {
+            return false;
+        }
+
         if ($response->getStatusCode() !== 200 || $response->headers->getCookies() !== [] || $response->headers->hasCacheControlDirective('no-store')) {
             return false;
         }
@@ -70,7 +74,7 @@ class PageCache
             }
         }
 
-        $this->store()->put($this->key($request), [
+        $this->store()->put($this->key($request, $version), [
             'status' => $response->getStatusCode(),
             'headers' => $headers,
             'content' => $content,
@@ -91,9 +95,9 @@ class PageCache
         return is_numeric($version) ? (int) $version : 1;
     }
 
-    private function key(Request $request): string
+    private function key(Request $request, int $version): string
     {
-        return sprintf('cms:page-cache:%d:%s', $this->version(), sha1(sprintf('%s|%s', $request->getHost(), $request->getPathInfo())));
+        return sprintf('cms:page-cache:%d:%s', $version, sha1(sprintf('%s|%s', $request->getHost(), $request->getPathInfo())));
     }
 
     private function store(): Repository
