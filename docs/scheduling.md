@@ -1,7 +1,8 @@
 # Scheduling
 
-A page can be published or unpublished at a planned moment. The moments are stored in `publish_at` and
-`unpublish_at`, and the `cms:publish-scheduled` command applies them.
+A page can be published or unpublished at a planned moment. The moments are stored in `publish_at` and `unpublish_at`,
+and the `cms:publish-scheduled` command applies them. Editors plan them in the admin of `j87nl/laravel-vue-cms`, see
+[Publication](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/screens/publication.md#planning).
 
 ## Planning a change
 
@@ -42,8 +43,10 @@ This only runs when the Laravel scheduler runs (for example `php artisan schedul
 
 - After a successful change, the moment is cleared.
 - When the change is refused (for example unpublishing a page that has become the home page), the moment is kept, the
-  reason is stored in `schedule_error` and a warning is logged. The admin can show `schedule_error` to the editor.
-  The command tries again every minute, but stores and logs the same reason only once.
+  reason is stored in `schedule_error` and a warning is logged. The admin of `j87nl/laravel-vue-cms` shows
+  `schedule_error` in its
+  [publication panel](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/screens/publication.md#planning). The
+  command tries again every minute, but stores and logs the same reason only once.
 - When a page fails with an unexpected exception, the other pages are still processed, the command exits with a
   failure code and the exception is reported. The same failure of the same page is reported at most once per 24
   hours.

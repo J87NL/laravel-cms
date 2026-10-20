@@ -20,6 +20,9 @@ The package itself only checks permissions in the [MCP tools](mcp-tools.md): `cm
 `cms.media` and `cms.redirects`, each for its own tools. `cms.pages.publish` and `cms.settings` are never checked in
 this package; they exist for the admin. The public routes and the [actions](actions.md) check no permissions.
 
+The admin of `j87nl/laravel-vue-cms` checks all six on its routes. Which permission opens which screen is listed in
+its [permissions documentation](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/permissions.md).
+
 ## The permissions config key
 
 When the service provider registers, it pushes every permission name into the config key named by
@@ -64,7 +67,35 @@ Gate::define('cms.pages.write', fn (User $user, Page $page): bool => $user->is_a
 
 The rule in this example (only admins may change the home page) stands for your own rules.
 
+### With laravel-vue-cms installed
+
+`j87nl/laravel-vue-cms` defines this gate itself: a user with `cms.pages.edit` may change a page that is not published,
+and a published page only with `cms.pages.publish` as well. See
+[Changing a published page](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/permissions.md#changing-a-published-page).
+
+For the MCP tools this adds nothing. They only change pages that are not published and not scheduled, also for a user
+who may publish (see [MCP tools](mcp-tools.md#rules-the-tools-follow)). On those pages the admin's rule only asks for
+`cms.pages.edit`, which the tools check anyway.
+
+Your own `Gate::define('cms.pages.write', ...)` replaces the admin's gate, because app service providers boot after
+package providers. Admin users would then lose the published-page rule without any warning. To add your own rule,
+combine it with the admin's rule from `J87NL\VueCms\Support\PageWriteAccess`:
+
+```php
+use J87NL\Cms\Models\Page;
+use J87NL\VueCms\Support\PageWriteAccess;
+
+Gate::define(PageWriteAccess::ABILITY, function (User $user, Page $page): bool {
+    if (! PageWriteAccess::allows($user, $page)) {
+        return false;
+    }
+
+    return $user->is_admin || ! $page->is_home;
+});
+```
+
 ## The actions
 
 The [actions](actions.md) check no permissions. The admin, or any other code that calls them, must authorize first,
-for example `cms.pages.publish` before `ChangePageStatus`.
+for example `cms.pages.publish` before `ChangePageStatus`. The admin of `j87nl/laravel-vue-cms` does this on every
+route.

@@ -3,6 +3,9 @@
 A page is a `J87NL\Cms\Models\Page` in the `cms_pages` table. Pages form a tree: every page has an optional parent,
 and its public URL follows from the slugs of its ancestors.
 
+This page describes the model and its rules. Editors manage pages in the admin of `j87nl/laravel-vue-cms`, see
+[Pages](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/screens/pages.md) in its docs.
+
 ## Fields
 
 | Field | Purpose |

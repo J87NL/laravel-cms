@@ -3,6 +3,9 @@
 Every change to a page or its blocks stores a snapshot of the page in `cms_revisions`, as a
 `J87NL\Cms\Models\Revision`. A revision can be restored.
 
+Editors list and restore revisions in the page editor of `j87nl/laravel-vue-cms`, see
+[Revisions](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/screens/revisions.md) in its docs.
+
 ## What is recorded
 
 These actions record a revision after their change:

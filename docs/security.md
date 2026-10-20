@@ -63,9 +63,10 @@ it is rendered. A sanitizer change therefore also applies to content stored earl
 
 ## Links
 
-The call to action block and the MCP menu tool validate links with `J87NL\Cms\Rules\SafeLink`. A link passes when it
-is a path starting with a single `/`, a `#fragment`, a valid `http://` or `https://` URL, or a `mailto:` or `tel:`
-link, without whitespace or backslashes. `SafeLink::passes(string $link)` is checked again on render.
+The call to action block, the MCP menu tool and the menu item form of `j87nl/laravel-vue-cms` validate links with
+`J87NL\Cms\Rules\SafeLink`. A link passes when it is a path starting with a single `/`, a `#fragment`, a valid `http://`
+or `https://` URL, or a `mailto:` or `tel:` link, without whitespace or backslashes. `SafeLink::passes(string $link)` is
+checked again on render.
 
 ## Embeds
 
@@ -121,3 +122,6 @@ The JSON-LD is encoded with `JSON_HEX_TAG` and `JSON_HEX_AMP`, so page content c
 
 This package does not authenticate or authorize anything on its public routes, and it ships no admin routes. The
 actions do not check permissions either: the code that calls them must. See [Permissions](permissions.md).
+
+The admin of `j87nl/laravel-vue-cms` runs its routes behind `auth` and a permission check, and locks the page
+while it writes. See its [security documentation](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/security.md).

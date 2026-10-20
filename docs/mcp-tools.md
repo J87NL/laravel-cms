@@ -92,7 +92,8 @@ each type's `rules()`, so custom block types appear there too.
 ## Rules the tools follow
 
 - No tool publishes, unpublishes, schedules, makes a home page, deletes pages or uploads media. Publishing stays in the
-  CMS admin.
+  CMS admin, see [Publication](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/screens/publication.md) in the
+  laravel-vue-cms docs.
 - `page_update` and the block tools only change draft or unpublished pages without a planned publication
   (`publish_at`). A published or scheduled page is refused, also for a user who may publish. `pages_list` and
   `page_get` report this as `writable`.

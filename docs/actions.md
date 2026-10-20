@@ -1,7 +1,12 @@
 # Actions
 
-All writes go through action classes in `J87NL\Cms\Actions`. The admin package and the MCP tools use them, so an app
-that writes content the same way gets the same validation, sanitizing, revisions, redirects and cache invalidation.
+Most writes go through action classes in `J87NL\Cms\Actions`. The admin package
+[`j87nl/laravel-vue-cms`](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/index.md) and the MCP tools use
+them, so an app that writes content the same way gets the same validation, sanitizing, revisions, redirects and cache
+invalidation.
+
+A few changes have no action and are plain model writes: editing the details of a media asset (see [Media](#media)),
+deleting or reordering menu items (see [Menus](#menus)) and deleting a redirect (see [Redirects](#redirects)).
 
 Resolve an action from the container and call `handle()`:
 

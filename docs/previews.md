@@ -1,7 +1,8 @@
 # Previews
 
 A preview shows a page of any status, a draft included, as it would look on the website. Previews use signed URLs,
-so the editor can share the link without logging in.
+so the editor can share the link without logging in. The page editor of `j87nl/laravel-vue-cms` shows this link,
+see [Publication](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/screens/publication.md#preview) in its docs.
 
 ## Creating a preview link
 

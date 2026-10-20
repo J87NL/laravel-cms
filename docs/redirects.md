@@ -9,6 +9,9 @@ a target `to`, a `status_code` (`301` or `302`), a hit counter and a `source`:
 | `RedirectSource::Manual` | `manual` | An editor, or the `redirect_save` MCP tool |
 | `RedirectSource::Import` | `import` | A CSV import |
 
+Editors add, edit and import redirects in the admin of `j87nl/laravel-vue-cms`, see
+[Redirects](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/screens/redirects.md) in its docs.
+
 ## How a redirect applies
 
 A redirect only applies when no public page has the requested path: a published page always wins. When a redirect

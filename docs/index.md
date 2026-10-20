@@ -7,9 +7,31 @@ The package holds the content model and the public website: pages, blocks, media
 site settings. It also owns everything search engines and AI answer engines read: meta and Open Graph tags,
 JSON-LD, `sitemap.xml`, `robots.txt` and `llms.txt`. Public pages set no cookies and load no JavaScript.
 
-The admin is not part of this package. It lives in [`j87nl/laravel-vue-cms`](https://github.com/J87NL/laravel-vue-cms)
-(Inertia and Vue). This package has no frontend dependencies. Everything the admin does goes through the action
-classes described in [Actions](actions.md), so an app can also build its own admin.
+## How the packages fit together
+
+The CMS is split into two packages. The admin requires the core; the core also works on its own:
+
+| Package | What it does |
+|---|---|
+| `j87nl/laravel-cms` (this package) | The core: models, actions, validation rules, block types, permissions, public rendering, Blade components, SEO, sitemap, page cache and MCP tools |
+| [`j87nl/laravel-vue-cms`](https://github.com/J87NL/laravel-vue-cms) | The admin: Inertia and Vue screens where editors manage pages, blocks, media, menus, redirects and site settings |
+
+The boundary rule: **the core owns the data, the rules, the actions and the public website; the admin owns the
+screens and saves through the core's actions.**
+
+This package ships no admin routes and has no frontend dependencies. Because the admin writes through the
+[actions](actions.md) and the [models](models.md) of this package, an app can also build its own admin.
+
+Which package to install:
+
+- You want an admin for editors: install `j87nl/laravel-vue-cms`. It requires this package, so Composer installs
+  both. Follow the [installation](installation.md) of this package as well, then the
+  [admin installation](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/installation.md).
+- You only need the public website, or you edit content in code or through the [MCP tools](mcp-tools.md): install
+  this package alone.
+
+These docs describe the core. For the admin screens, read the
+[laravel-vue-cms documentation](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/index.md).
 
 ## How it works
 
@@ -81,3 +103,5 @@ and `/about-us` redirects there. A second page would be served at its own path.
 - [Custom block types](custom-blocks.md) - add your own blocks
 - [Rendering](rendering.md) - routes, layout and views
 - [MCP tools](mcp-tools.md) - let assistants read and edit content
+- [laravel-vue-cms documentation](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/index.md) - the admin screens
+  for editors

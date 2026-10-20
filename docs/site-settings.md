@@ -3,6 +3,9 @@
 Site-wide settings live in one row of `cms_settings`, as `J87NL\Cms\Models\SiteSettings`. `SiteSettings::current()`
 returns that row, or an unsaved empty instance when there is none.
 
+Editors change the settings in the admin of `j87nl/laravel-vue-cms`. Its form adds length limits to the fields, see
+[Site settings](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/screens/settings.md) in its docs.
+
 ## Fields
 
 | Field | Purpose |

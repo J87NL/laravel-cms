@@ -18,6 +18,11 @@ before the metadata is dropped.
 composer require j87nl/laravel-cms
 ```
 
+This installs the core only: the content model, the public website and the MCP tools. For an admin, install
+`j87nl/laravel-vue-cms` instead. It requires this package, so Composer installs both. Follow the steps on this page
+either way; the [admin installation](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/installation.md) says which
+of them the admin needs.
+
 The service provider `J87NL\Cms\CmsServiceProvider` is auto-discovered. The package pulls in
 `tranquil-tools/laravel-form-builder`, which the block types use to describe their fields, and `laravel/mcp` for
 the [MCP tools](mcp-tools.md).
@@ -75,7 +80,8 @@ The default, `cms::layouts.default`, is the same layout without any styling. See
 ## 5. Define the permission gates
 
 The package defines no gates. The [MCP tools](mcp-tools.md) check each CMS permission with
-`Gate::forUser($user)->allows(...)`, so every tool refuses until your app defines a gate per permission. In the
+`Gate::forUser($user)->allows(...)`, so every tool refuses until your app defines a gate per permission. The admin of
+`j87nl/laravel-vue-cms` checks the same permissions on its routes. In the
 `boot()` method of a service provider:
 
 ```php

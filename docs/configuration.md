@@ -13,6 +13,10 @@ The package also reads a few Laravel settings: `app.key` (contact form tokens), 
 this site in redirects), `app.name` (site name fallback), `app.locale` (language in JSON-LD and `og:locale`),
 `session.cookie` (cache bypass) and `auth.providers.users.model` (revision authors).
 
+The admin of `j87nl/laravel-vue-cms` reads some of these keys too, such as `menus`, `preview.minutes`,
+`blocks.disabled` and `media.max_upload_kilobytes`. Its own settings live in `config/vue-cms.php`, see its
+[configuration](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/configuration.md).
+
 ## General
 
 | Key | Default | Purpose |
@@ -174,7 +178,7 @@ See [Contact form](contact-form.md).
 | Key | Default | Purpose |
 |---|---|---|
 | `media.disk` | `'public'` | Filesystem disk of the media collection |
-| `media.max_upload_kilobytes` | `10240` | Not read by this package. `UploadMedia` does not check the file size, so validate it where you accept the upload |
+| `media.max_upload_kilobytes` | `10240` | Not read by this package. `UploadMedia` does not check the file size, so validate it where you accept the upload. The media screen of `j87nl/laravel-vue-cms` uses it as its upload limit |
 | `media.max_pixels` | `40000000` | Largest image in pixels (width times height) that an upload may have |
 | `media.widths` | `[480, 960, 1600]` | Widths of the WebP conversions |
 
@@ -226,4 +230,6 @@ matches `path_pattern`. The same hosts are added to the CSP `frame-src` of a pag
 | `rich_text.editor_options` | see the config file | Options passed to the editor: toolbar, plugins, block formats, valid elements and table settings |
 
 These keys only shape the editor in the admin. What is stored and rendered is decided by the sanitizer, see
-[Security](security.md#rich-text).
+[Security](security.md#rich-text). The admin's Vue app must register an editor under the `rich_text.editor` key, see
+[Rich text editor](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/installation.md#10-rich-text-editor) in the
+laravel-vue-cms installation.

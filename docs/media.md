@@ -4,14 +4,17 @@ Images are `J87NL\Cms\Models\MediaAsset` records in the `cms_media_assets` table
 `spatie/laravel-medialibrary`, in the media collection `file` (`MediaAsset::COLLECTION`) on the disk from
 `cms.media.disk`.
 
+Editors upload and edit images in the admin of `j87nl/laravel-vue-cms`, see
+[Media](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/screens/media.md) in its docs.
+
 ## Fields
 
 | Field | Purpose |
 |---|---|
 | `alt` | Alternative text, required |
 | `caption` | Optional caption, rendered as `figcaption` |
-| `focal_x` | Horizontal focal point in percent, default `50` |
-| `focal_y` | Vertical focal point in percent, default `50` |
+| `focal_x` | Horizontal focal point, as a percentage from the left, default `50` |
+| `focal_y` | Vertical focal point, as a percentage from the top, default `50` |
 
 The focal point is used as `object-position` when an image is cropped to fill its box (the gallery and the text with
 image block).
@@ -30,17 +33,18 @@ $asset = app(UploadMedia::class)->handle($request->file('file'), [
 `UploadMedia::handle(UploadedFile $file, array $attributes): MediaAsset` takes the `alt`, `caption`, `focal_x` and
 `focal_y` attributes. Before the file is stored, `J87NL\Cms\Media\ImageCleaner`:
 
-1. refuses an image that cannot be read, or whose width times height is above `cms.media.max_pixels`;
+1. refuses a file that is not a JPEG, PNG, WebP or GIF image, an image that cannot be read, or an image whose width
+   times height is above `cms.media.max_pixels`;
 2. refuses an animated GIF;
 3. decodes the image with GD, applies the EXIF orientation of a JPEG (when the `exif` extension is available) and
    encodes it again (JPEG and WebP at quality 90).
 
 Encoding again drops all metadata, such as EXIF and GPS locations. A refusal is a `ValidationException` on the `file`
-key.
+key, and nothing is stored.
 
 The media collection accepts `image/jpeg`, `image/png`, `image/webp` and `image/gif`. `UploadMedia` does not check
 the file size or the required alt text: validate those in your request. `cms.media.max_upload_kilobytes` is not read
-by this package.
+by this package; the media screen of `j87nl/laravel-vue-cms` uses it as its upload limit.
 
 The stored file is named after the slug of the original file name. The width and height of the cleaned image are
 stored as custom properties of the media item.

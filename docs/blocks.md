@@ -4,6 +4,9 @@ A page's content is a list of blocks. A block is a `J87NL\Cms\Models\Block` in t
 key, a JSON `data` column, a `sort_order` and an `is_visible` flag. The block type, registered in
 `J87NL\Cms\Blocks\BlockRegistry`, decides which fields the data has, how it is cleaned on save and how it renders.
 
+Editors add and edit blocks in the page editor of `j87nl/laravel-vue-cms`. The admin builds its block forms from the
+registered types, see [Blocks](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/screens/blocks.md) in its docs.
+
 ## Built-in block types
 
 | Key | Class | Purpose |

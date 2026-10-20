@@ -30,3 +30,5 @@
     - [Security](security.md)
     - [Artisan commands](artisan-commands.md)
     - [Testing](testing.md)
+- Related
+    - [laravel-vue-cms (admin)](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/index.md)

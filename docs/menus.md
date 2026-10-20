@@ -3,6 +3,9 @@
 A site has named menus, `main` and `footer` by default (`cms.menus`). A menu is a `J87NL\Cms\Models\Menu` with a
 `key`; its items are `J87NL\Cms\Models\MenuItem` records.
 
+Editors manage menu items in the admin of `j87nl/laravel-vue-cms`, see
+[Menus](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/screens/menus.md) in its docs.
+
 ## Menu items
 
 An item links either to a page or to a URL:
@@ -16,7 +19,8 @@ An item links either to a page or to a URL:
 | `sort_order` | The position within the menu |
 
 Menus have two levels: an item can only be placed under a top-level item, and an item that has items below it cannot
-be placed under another item.
+be placed under another item (`cms::validation.menu_item_has_children`). Deleting an item also deletes the items
+below it, through the `parent_id` foreign key.
 
 ## Saving items
 

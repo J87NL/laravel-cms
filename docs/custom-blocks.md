@@ -1,7 +1,8 @@
 # Custom block types
 
 A block type is a class that implements `J87NL\Cms\Blocks\BlockType`. Register it in a service provider and it can
-be added to pages, is validated with its own rules and renders with its own Blade view.
+be added to pages, is validated with its own rules and renders with its own Blade view. The admin of
+`j87nl/laravel-vue-cms` shows a registered type with an add button and a form built from its `fields()`.
 
 ## The contract
 
@@ -198,9 +199,9 @@ class BannerBlock extends AbstractBlockType implements ReferencesMedia
 ```
 
 `mediaIds()` returns the ids of the media assets a block uses. The renderer loads those assets in one query for the
-whole page, so `$context->asset()` finds them. `J87NL\Cms\Media\MediaUsage` also counts them as usage, so
-`DeleteMedia` refuses to delete an image in use. Validate media ids with `J87NL\Cms\Media\MediaOptions::existsRule()`; `MediaOptions::all()` returns the
-assets as `value` and `label` pairs for a select field.
+whole page, so `$context->asset()` finds them. `J87NL\Cms\Media\MediaUsage` also counts them as usage, so `DeleteMedia`
+refuses to delete an image in use. Validate media ids with `J87NL\Cms\Media\MediaOptions::existsRule()`;
+`MediaOptions::all()` returns the assets as `value` and `label` pairs for a select field.
 
 ### HasJsonLd
 
