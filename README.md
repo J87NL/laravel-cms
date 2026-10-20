@@ -41,6 +41,8 @@ Point `cms.layout` at your public Blade layout. The layout yields `title`, `head
 
 The package registers a catch-all route last, so application routes always win. Public routes run without session middleware.
 
+Cached public pages are only invalidated by content changes. Run `php artisan cms:flush-page-cache` after every deploy, so a changed layout or view reaches visitors.
+
 ## What it does
 
 - **Pages:** a tree with draft, published and unpublished states, one public home page, revisions with restore, and planned publishing (`cms:publish-scheduled` runs every minute through the scheduler).

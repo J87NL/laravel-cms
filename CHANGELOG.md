@@ -4,6 +4,12 @@ All notable changes to this package are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.2.1]
+
+### Added
+
+- `cms:flush-page-cache` drops every cached public page. Run it after a deploy, because a changed layout or view does not invalidate the cache by itself.
+
 ## [0.2.0]
 
 ### Added
@@ -42,5 +48,6 @@ First release, extracted from the j87.nl app.
 - Require `symfony/html-sanitizer` `^7.4.13|^8.0.13` for CVE-2026-45064, CVE-2026-45066, CVE-2026-45753, CVE-2026-48760 and CVE-2026-48761.
 
 [Unreleased]: https://github.com/J87NL/laravel-cms/compare/v0.2.0...HEAD
+[0.2.1]: https://github.com/J87NL/laravel-cms/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/J87NL/laravel-cms/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/J87NL/laravel-cms/releases/tag/v0.1.0

@@ -19,6 +19,7 @@ use J87NL\Cms\Blocks\Types\ImageBlock;
 use J87NL\Cms\Blocks\Types\RichTextBlock;
 use J87NL\Cms\Blocks\Types\TextWithImageBlock;
 use J87NL\Cms\Cache\FlushPageCache;
+use J87NL\Cms\Console\FlushPageCacheCommand;
 use J87NL\Cms\Console\PublishScheduledPages;
 use J87NL\Cms\Html\RichTextSanitizer;
 use J87NL\Cms\Mcp\BlockTypeSummary;
@@ -104,6 +105,7 @@ class CmsServiceProvider extends ServiceProvider
 
         if ($this->app->runningInConsole()) {
             $this->commands([
+                FlushPageCacheCommand::class,
                 PublishScheduledPages::class,
             ]);
         }

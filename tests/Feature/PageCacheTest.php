@@ -103,3 +103,12 @@ test('a response rendered while the cache is flushed is not served after the flu
         ->assertSee('First version', false)
         ->assertDontSee('Stale version');
 });
+
+test('the flush command drops cached pages so a changed view is served', function (): void {
+    $this->get('/about')->assertHeader('X-Cms-Cache', 'miss');
+    $this->get('/about')->assertHeader('X-Cms-Cache', 'hit');
+
+    $this->artisan('cms:flush-page-cache')->assertSuccessful();
+
+    $this->get('/about')->assertHeader('X-Cms-Cache', 'miss');
+});
