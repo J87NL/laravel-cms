@@ -1,0 +1,112 @@
+# Actions
+
+All writes go through action classes in `J87NL\Cms\Actions`. The admin package and the MCP tools use them, so an app
+that writes content the same way gets the same validation, sanitizing, revisions, redirects and cache invalidation.
+
+Resolve an action from the container and call `handle()`:
+
+```php
+use J87NL\Cms\Actions\SavePage;
+use J87NL\Cms\Models\Page;
+
+$page = app(SavePage::class)->handle(new Page, $validated, userId: $request->user()?->id);
+```
+
+Actions do not check permissions, see [Permissions](permissions.md). They throw an
+`Illuminate\Validation\ValidationException` when a change breaks a rule of the content model, such as a path that is
+taken. In a controller, Laravel turns that into the usual validation response. The `$userId` is stored as the author
+of the revision and may be `null`.
+
+## Pages
+
+| Action | Signature | Revision |
+|---|---|---|
+| `SavePage` | `handle(Page $page, array $attributes, ?int $userId): Page` | Yes |
+| `MovePage` | `handle(Page $page, Page $target, string $position, ?int $userId): void` | Yes |
+| `ChangePageStatus` | `handle(Page $page, PageStatus $status, ?int $userId): void` | Yes |
+| `MakeHomePage` | `handle(Page $page): void` | No |
+| `SchedulePage` | `handle(Page $page, ?Carbon $publishAt, ?Carbon $unpublishAt): void` | No |
+| `DeletePage` | `handle(Page $page): void` | No |
+
+Helpers for an admin that wants to disable a button beforehand:
+
+- `DeletePage::blockedReason(Page $page): ?string`
+- `ChangePageStatus::unpublishBlockedReason(Page $page): ?string`
+- `MakeHomePage::blockedReason(Page $page): ?string` (an instance method)
+
+`SavePage::apply(Page $page, array $attributes): void` saves without recording a revision. `MovePage` takes
+`MovePage::BEFORE`, `MovePage::AFTER` or `MovePage::INSIDE` as position; anything else throws an
+`InvalidArgumentException`.
+
+See [Pages](pages.md) and [Scheduling](scheduling.md).
+
+## Blocks
+
+| Action | Signature | Revision |
+|---|---|---|
+| `SaveBlock` | `handle(Page $page, Block $block, BlockType $type, array $data, ?int $userId): Block` | Yes |
+| `DeleteBlock` | `handle(Block $block, ?int $userId): void` | Yes |
+| `ToggleBlockVisibility` | `handle(Block $block, ?int $userId): void` | Yes |
+| `ReorderBlocks` | `handle(Page $page, array $blockIds, ?int $userId): void` | Yes |
+| `ReorderBlocks` | `move(Page $page, int $blockId, int $toBlockId, ?int $userId): void` | Yes |
+
+`ReorderBlocks::move()` throws an `InvalidArgumentException` when either block is not on the page.
+
+`SaveBlock` does not validate: validate with `$type->rules()` first. See [Blocks](blocks.md).
+
+## Revisions
+
+| Action | Signature |
+|---|---|
+| `RecordRevision` | `handle(Page $page, ?int $userId): Revision` |
+| `RestoreRevision` | `handle(Revision $revision, ?int $userId): Page` |
+
+`RecordRevision::snapshot(Page $page): array` returns the snapshot without storing it. See [Revisions](revisions.md).
+
+## Media
+
+| Action | Signature |
+|---|---|
+| `UploadMedia` | `handle(UploadedFile $file, array $attributes): MediaAsset` |
+| `DeleteMedia` | `handle(MediaAsset $asset): void` |
+
+To change the alt text, caption or focal point of an existing asset, update the model directly. See
+[Media](media.md).
+
+## Menus
+
+| Action | Signature |
+|---|---|
+| `SaveMenuItem` | `handle(Menu $menu, MenuItem $item, ?int $pageId, ?string $url, ?string $label, ?int $parentId): MenuItem` |
+
+There is no action to delete or reorder menu items: delete the model, or update `sort_order`, directly. See
+[Menus](menus.md).
+
+## Redirects
+
+| Action | Signature |
+|---|---|
+| `SaveRedirect` | `handle(Redirect $redirect, string $from, string $to, int $statusCode, RedirectSource $source): Redirect` |
+| `ImportRedirects` | `handle(string $file): ImportResult` |
+
+`SaveRedirect` also has `forPathChange(string $oldPath, string $newPath): void`, used for the automatic redirects, and
+`releasePath(string $path): void`, which deletes the redirect from a path. Delete a redirect by deleting the model.
+See [Redirects](redirects.md).
+
+## Site settings
+
+| Action | Signature |
+|---|---|
+| `SaveSiteSettings` | `handle(array $attributes): SiteSettings` |
+
+See [Site settings](site-settings.md).
+
+## Validation rules
+
+Two classes in `J87NL\Cms\Validation` hold the request rules that the admin and the MCP tools share. Both have
+`fields(): array` with all rules and `for(string $field): array` with the rules of one field.
+
+- `PageRules`: `title`, `slug`, `parent_id`, `menu_title`, `meta_title`, `meta_description`, `og_image_id`,
+  `canonical_url` and `noindex`. The rules for `title` and `noindex` have no presence rule, so add `required` or
+  `sometimes` yourself. There is no rule for `schema_type`.
+- `RedirectRules`: `from_path`, `to` and `status_code`.

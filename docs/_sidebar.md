@@ -1,0 +1,32 @@
+- [Introduction](index.md)
+- [Installation](installation.md)
+- [Configuration](configuration.md)
+- Content
+    - [Pages](pages.md)
+    - [Blocks](blocks.md)
+    - [Custom block types](custom-blocks.md)
+    - [Media](media.md)
+    - [Menus](menus.md)
+    - [Revisions](revisions.md)
+    - [Redirects](redirects.md)
+    - [Site settings](site-settings.md)
+    - [Scheduling](scheduling.md)
+    - [Previews](previews.md)
+- Public website
+    - [Rendering](rendering.md)
+    - [Blade components](blade-components.md)
+    - [Contact form](contact-form.md)
+    - [Page cache](page-cache.md)
+- Findability
+    - [SEO tags and JSON-LD](seo.md)
+    - [Sitemap](sitemap.md)
+    - [robots.txt and llms.txt](robots-and-llms.md)
+- Integration
+    - [Permissions](permissions.md)
+    - [Actions](actions.md)
+    - [Models](models.md)
+    - [MCP tools](mcp-tools.md)
+- Reference
+    - [Security](security.md)
+    - [Artisan commands](artisan-commands.md)
+    - [Testing](testing.md)
