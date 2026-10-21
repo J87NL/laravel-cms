@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Contracts\Auth\Access\Authorizable;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Testing\Fluent\AssertableJson;
 use Illuminate\Validation\ValidationException;
 use J87NL\Cms\Actions\RecordRevision;
@@ -818,4 +819,100 @@ it('treats equal values of another type as no change', function (): void {
         ->assertOk();
 
     expect($page->pendingRevision()->exists())->toBeFalse();
+});
+
+it('keeps new pending blocks at the top when the live page was reordered', function (): void {
+    makePage(['title' => 'Home', 'slug' => 'home'], home: true);
+    $page = makePage(['title' => 'Live', 'slug' => 'live']);
+    $first = addBlock($page, 'rich_text', ['html' => '<p>a</p>']);
+    $second = addBlock($page, 'rich_text', ['html' => '<p>b</p>']);
+    $editor = cmsUser(CmsPermission::PagesEdit);
+
+    foreach (['<p>n1</p>', '<p>n2</p>'] as $html) {
+        CmsTestServer::actingAs($editor)
+            ->tool(BlockAddTool::class, ['page_id' => $page->id, 'type' => 'rich_text', 'data' => ['html' => $html]])
+            ->assertOk();
+    }
+
+    CmsTestServer::actingAs($editor)
+        ->tool(BlocksReorderTool::class, ['page_id' => $page->id, 'block_ids' => [-1, -2, $first->id, $second->id]])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(BlocksReorderLiveTool::class, ['page_id' => $page->id, 'block_ids' => [$second->id, $first->id]])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(PagePublishTool::class, ['page_id' => $page->id])
+        ->assertOk();
+
+    expect(array_map(fn (array $block): mixed => $block[1], liveBlockSummary($page)))->toBe([
+        '<p>n1</p>',
+        '<p>n2</p>',
+        '<p>b</p>',
+        '<p>a</p>',
+    ]);
+});
+
+it('treats stored block data with its keys sorted, as MySQL stores JSON, as no change', function (): void {
+    $page = makePage(['title' => 'Live']);
+    $block = addBlock($page, 'call_to_action', ['title' => 'Kom', 'button_label' => 'Klik', 'url' => '/contact']);
+    $data = $block->refresh()->data;
+    $sorted = $data;
+
+    ksort($sorted);
+
+    Block::query()
+        ->whereKey($block->id)
+        ->update(['data' => json_encode($sorted)]);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(BlockUpdateTool::class, ['block_id' => $block->id, 'data' => $data])
+        ->assertOk();
+
+    expect(array_keys($sorted))->not->toBe(array_keys($data))
+        ->and($page->pendingRevision()->exists())->toBeFalse();
+});
+
+it('logs a pending parent change that cannot be applied when a page goes offline', function (): void {
+    Log::spy();
+
+    makePage(['title' => 'Home', 'slug' => 'home'], home: true);
+    $page = makePage(['title' => 'Live', 'slug' => 'live']);
+    $child = makePage(['title' => 'Kind', 'slug' => 'kind', 'parent_id' => $page->id]);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'parent_id' => $child->id, 'title' => 'Voorstel'])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(PageUnpublishTool::class, ['page_id' => $page->id])
+        ->assertOk();
+
+    expect($page->refresh()->status)->toBe(PageStatus::Unpublished)
+        ->and($page->parent_id)->toBeNull()
+        ->and($page->title)->toBe('Voorstel');
+
+    Log::shouldHaveReceived('warning')->once();
+});
+
+it('takes a page with a legacy slug offline when its pending address is taken', function (): void {
+    makePage(['title' => 'Home', 'slug' => 'home'], home: true);
+    $page = makePage(['title' => 'Live', 'slug' => 'live']);
+    Page::query()
+        ->whereKey($page->id)
+        ->update(['slug' => 'Over-Ons']);
+    makePage(['title' => 'Bezet', 'slug' => 'bezet']);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'slug' => 'bezet', 'title' => 'Voorstel'])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(PageUnpublishTool::class, ['page_id' => $page->id])
+        ->assertOk();
+
+    expect($page->refresh()->status)->toBe(PageStatus::Unpublished)
+        ->and($page->slug)->toBe('Over-Ons')
+        ->and($page->title)->toBe('Voorstel');
 });

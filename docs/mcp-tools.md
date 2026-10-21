@@ -106,7 +106,8 @@ pending revision again, so `pending_revision` is `null` in that response.
   the pending revision wins (a block it changed but that was removed live comes back, a block it removed is removed even
   when it changed live). When the pending revision changed the order of the blocks it shares with its base, its blocks
   come first in that order, followed by blocks added live in the meantime. Otherwise the live order stays, and a block
-  added in the pending revision goes in front of the block that follows it there, or at the end.
+  added in the pending revision goes in front of the block that follows it there (right after a block that was added
+  with it, at the top when nothing comes before it, or at the end).
   The pending revision is removed, a normal revision is recorded and the page cache is flushed. The live
   tools say in their answer when the page has a pending revision.
 - Taking a page offline (`page_unpublish`, the admin or a planned unpublish) applies its pending revision to the page in

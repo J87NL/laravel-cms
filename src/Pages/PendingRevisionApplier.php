@@ -31,7 +31,7 @@ class PendingRevisionApplier
             'parent_id',
         ]);
 
-        $this->applyPage($page, $pendingPage, $base['page']);
+        $this->applyPage($page, $pendingPage, $base['page'], $withPath);
         $this->applyBlocks($page, $content['blocks'], $base['blocks']);
 
         $revision->delete();
@@ -41,7 +41,7 @@ class PendingRevisionApplier
      * @param  array<string, mixed>  $pending
      * @param  array<string, mixed>  $base
      */
-    private function applyPage(Page $page, array $pending, array $base): void
+    private function applyPage(Page $page, array $pending, array $base, bool $withPath): void
     {
         $changes = [];
 
@@ -58,6 +58,13 @@ class PendingRevisionApplier
         }
 
         if ($changes === []) {
+            return;
+        }
+
+        if (! $withPath) {
+            $page->fill($changes);
+            $page->save();
+
             return;
         }
 
@@ -170,6 +177,16 @@ class PendingRevisionApplier
                 continue;
             }
 
+            $previousId = $this->previousPlaced(array_slice($pendingIds, 0, $index), $order);
+
+            if (is_null($previousId) || in_array($previousId, $createdIds, true)) {
+                $after = is_null($previousId) ? false : array_search($previousId, $order, true);
+
+                array_splice($order, $after === false ? 0 : $after + 1, 0, [$id]);
+
+                continue;
+            }
+
             $position = count($order);
 
             foreach (array_slice($pendingIds, $index + 1) as $nextId) {
@@ -209,6 +226,21 @@ class PendingRevisionApplier
                 $block->save();
             }
         }
+    }
+
+    /**
+     * @param  list<int>  $previousIds
+     * @param  list<int>  $order
+     */
+    private function previousPlaced(array $previousIds, array $order): ?int
+    {
+        foreach (array_reverse($previousIds) as $previousId) {
+            if (in_array($previousId, $order, true)) {
+                return $previousId;
+            }
+        }
+
+        return null;
     }
 
     /**
