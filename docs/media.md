@@ -44,8 +44,9 @@ key, and nothing is stored.
 
 The media collection accepts `image/jpeg`, `image/png`, `image/webp` and `image/gif`. A file larger than
 `cms.media.max_upload_kilobytes` (default 10,240) is refused with a `ValidationException` on `file`
-(`cms::validation.media_too_large`) before anything is read. `UploadMedia` does not check the required alt text:
-validate it in your request, for example with `J87NL\Cms\Validation\MediaRules::for('alt')`.
+(`cms::validation.media_too_large`) before anything is read; `0` switches that check off. A failed upload (an
+`UploadedFile` that is not valid) is refused the same way. `UploadMedia` also validates the attributes with
+`J87NL\Cms\Validation\MediaRules`: `alt` is required, and `caption`, `focal_x` and `focal_y` are checked when given.
 
 The stored file is named after the slug of the original file name. The width and height of the cleaned image are
 stored as custom properties of the media item.

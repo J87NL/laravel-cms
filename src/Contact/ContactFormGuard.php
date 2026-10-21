@@ -12,9 +12,9 @@ class ContactFormGuard
 
     public const string TIMESTAMP = 'form_token';
 
-    public function token(int $blockId): string
+    public function token(int $blockId, bool $resubmission = false): string
     {
-        $time = now()->getTimestamp();
+        $time = now()->getTimestamp() - ($resubmission ? (int) config('cms.contact.min_seconds', 3) : 0);
 
         return sprintf('%d.%s', $time, $this->signature($blockId, $time));
     }

@@ -273,3 +273,25 @@ test('the success query parameter can be configured', function (): void {
     $this->get(sprintf('/contact?verzonden=%d', $this->block->id))
         ->assertDontSee(__('cms::blocks.contact_form.default_success'));
 });
+
+test('a resubmit right after an expired or invalid post is accepted', function (array $overrides): void {
+    $this->travel(-((int) config('cms.contact.max_seconds')) - 60)->seconds();
+    $expired = app(ContactFormGuard::class)->token($this->block->id);
+    $this->travelBack();
+
+    $first = $overrides === [] ? [ContactFormGuard::TIMESTAMP => $expired] : $overrides;
+
+    $response = $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, $first))
+        ->assertStatus(422);
+
+    preg_match(sprintf('/name="%s" value="([^"]+)"/', ContactFormGuard::TIMESTAMP), (string) $response->getContent(), $matches);
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, [
+        ContactFormGuard::TIMESTAMP => $matches[1] ?? '',
+    ]))->assertStatus(303);
+
+    Mail::assertQueuedCount(1);
+})->with([
+    'expired' => [[]],
+    'invalid' => [['email' => 'typo']],
+]);

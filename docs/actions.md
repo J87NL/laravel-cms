@@ -66,7 +66,8 @@ keeps the current order changes nothing and records no revision.
 | `RecordRevision` | `handle(Page $page, ?int $userId): Revision` |
 | `RestoreRevision` | `handle(Revision $revision, ?int $userId): Page` |
 
-`RecordRevision::snapshot(Page $page): array` returns the snapshot without storing it. See [Revisions](revisions.md).
+`RecordRevision::snapshot(Page $page): array` returns the snapshot without storing it, and `RecordRevision::keep()`
+the number of revisions kept per page (`cms.revisions.keep`, at least 1). See [Revisions](revisions.md).
 
 ## Media
 

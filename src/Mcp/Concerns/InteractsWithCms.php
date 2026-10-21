@@ -180,6 +180,9 @@ trait InteractsWithCms
      */
     protected function pageSchema(JsonSchema $schema): array
     {
+        $schemaTypes = PageRules::schemaTypes();
+        $schemaType = $schema->string()->description('The schema.org type of the page for structured data; WebPage when left empty.');
+
         return [
             'slug' => $schema->string()->description('The last part of the address, for example "over-ons". Derived from the title when left empty.'),
             'parent_id' => $schema->integer()->nullable()->description('The id of the parent page, or null for a top-level page.'),
@@ -189,7 +192,7 @@ trait InteractsWithCms
             'og_image_id' => $schema->integer()->description('The id of the share image, from media_list.'),
             'canonical_url' => $schema->string()->description('A full canonical address starting with https://, only when this page duplicates another one.'),
             'noindex' => $schema->boolean()->description('True to keep this page out of search engines.'),
-            'schema_type' => $schema->string()->enum(PageRules::schemaTypes())->description('The schema.org type of the page for structured data; WebPage when left empty.'),
+            'schema_type' => $schemaTypes === [] ? $schemaType : $schemaType->enum($schemaTypes),
         ];
     }
 

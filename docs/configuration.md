@@ -116,6 +116,10 @@ The schema.org types a page may have as its `schema_type`. `PageRules` refuses a
 these, and the admin of `j87nl/laravel-vue-cms` lists them. A page without a type uses `WebPage`. See
 [SEO tags and JSON-LD](seo.md).
 
+Removing a type that pages already use does not change those pages: their JSON-LD keeps the type. Saving such a page
+in the admin or with `page_update` and the old type fails validation until another type, or none, is chosen. An empty
+list leaves only "no type" valid.
+
 ## robots.txt
 
 ```php

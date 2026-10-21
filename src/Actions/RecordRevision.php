@@ -53,9 +53,14 @@ class RecordRevision
         ];
     }
 
+    public static function keep(): int
+    {
+        return max(1, (int) config('cms.revisions.keep', 20));
+    }
+
     private function prune(Page $page): void
     {
-        $keep = max(1, (int) config('cms.revisions.keep', 20));
+        $keep = self::keep();
 
         $oldestKeptId = Revision::query()
             ->where('page_id', $page->id)

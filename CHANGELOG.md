@@ -10,17 +10,18 @@ All notable changes to this package are documented here. The format follows [Kee
 - `ReorderMenuItems` and `DeleteMenuItem`, so the admin and apps reorder and delete menu items through actions.
 - `cms.schema_types` lists the schema.org types a page may have. `PageRules` has a `schema_type` rule that only accepts these, and `page_draft_create` and `page_update` take `schema_type`.
 - `cms.contact.sent_query` names the query parameter of the address after a sent contact form. The default stays `verzonden`.
-- `ContactFormGuard::verdict()` and the `ContactFormVerdict` enum.
+- `ContactFormGuard::verdict()` and the `ContactFormVerdict` enum. `ContactFormGuard::token()` takes `$resubmission`; a form shown again after an error gets a token that can be sent at once.
+- `RecordRevision::keep()` returns the number of revisions kept per page.
 - `ext-gd` is a declared requirement.
 
 ### Changed
 
-- `UploadMedia` refuses a file larger than `cms.media.max_upload_kilobytes` with a `ValidationException` on `file`.
+- `UploadMedia` refuses a failed upload and a file larger than `cms.media.max_upload_kilobytes` (`0` switches the check off) with a `ValidationException` on `file`, and validates `alt`, `caption`, `focal_x` and `focal_y` with `MediaRules`. `alt` is now required.
 - A contact form with a genuine but expired token shows "please try again" with a fresh token instead of pretending it was sent. A token that is too new still counts as a bot.
 - `AbstractBlockType::label()` returns the translated label instead of the translation key, and the MCP block type summary shows it.
 - `PageRules` allows a `canonical_url` of at most 255 characters, the size of its column.
-- Only the media library items of a `MediaAsset` flush the page cache; media of other models no longer does.
-- A transaction flushes the page cache once, however many content models it saves.
+- Only the media library items of a `MediaAsset` (also under a morph map alias) flush the page cache; media of other models no longer does.
+- A transaction flushes the page cache once, however many content models it saves. The flush is tied to the transaction itself, so a rolled back savepoint or a failing commit callback of other code cannot stop later flushes.
 - A block reorder that keeps the current order changes nothing and records no revision.
 - The `media_list` and `redirects_list` searches qualify their columns with the table name.
 

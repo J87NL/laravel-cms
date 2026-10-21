@@ -7,9 +7,11 @@ namespace J87NL\Cms\Actions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use J87NL\Cms\Media\ImageCleaner;
 use J87NL\Cms\Models\MediaAsset;
+use J87NL\Cms\Validation\MediaRules;
 
 class UploadMedia
 {
@@ -24,17 +26,14 @@ class UploadMedia
     {
         $this->assertSize($file);
 
+        $attributes = $this->validated($attributes);
+
         $cleaned = $this->cleaner->clean((string) $file->getRealPath(), (string) $file->getMimeType());
 
         try {
             return DB::transaction(function () use ($file, $attributes, $cleaned): MediaAsset {
                 $asset = MediaAsset::query()
-                    ->create(Arr::only($attributes, [
-                        'alt',
-                        'caption',
-                        'focal_x',
-                        'focal_y',
-                    ]));
+                    ->create($attributes);
 
                 $asset->addMedia($cleaned['path'])
                     ->usingFileName($this->fileName($file))
@@ -54,6 +53,12 @@ class UploadMedia
 
     private function assertSize(UploadedFile $file): void
     {
+        if (! $file->isValid()) {
+            throw ValidationException::withMessages([
+                'file' => __('cms::validation.image_unreadable'),
+            ]);
+        }
+
         $maxKilobytes = (int) config('cms.media.max_upload_kilobytes', 10240);
 
         if ($maxKilobytes <= 0 || (int) $file->getSize() <= $maxKilobytes * 1024) {
@@ -65,6 +70,25 @@ class UploadMedia
                 'max' => $maxKilobytes,
             ]),
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private function validated(array $attributes): array
+    {
+        $rules = MediaRules::fields();
+
+        foreach (array_keys($rules) as $field) {
+            if ($field === 'alt') {
+                continue;
+            }
+
+            $rules[$field] = ['sometimes', ...$rules[$field]];
+        }
+
+        return Validator::make(Arr::only($attributes, array_keys($rules)), $rules)->validate();
     }
 
     private function fileName(UploadedFile $file): string

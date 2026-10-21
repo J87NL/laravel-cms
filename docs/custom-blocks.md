@@ -47,6 +47,10 @@ Extend `J87NL\Cms\Blocks\AbstractBlockType` to get defaults for four of the meth
 | Method | Default |
 |---|---|
 | `label()` | The translation of `cms::blocks.{key}.label` in the current locale |
+
+`label()` should return translated text. Override it with `__('your.key')`, not with the bare key: the MCP block type
+summary and the admin still pass a returned key through `__()`, so an old type that returns a key keeps working, but
+other code that shows the label gets the key.
 | `rules()` | The rules of `fields()`, collected with `FormConfig::make($this->fields())->getRules()` |
 | `prepare()` | The data unchanged |
 | `viewData()` | `['data' => $data]` |

@@ -41,7 +41,8 @@ handles it in this order:
    IP limit and gets the same redirect as a sent message, but no mail is sent.
 4. A genuine token older than `cms.contact.max_seconds` has expired. The page is shown again with the message
    `cms::blocks.contact_form.expired`, the entered values and a fresh token, status `422`. It counts toward the IP
-   limit, and no mail is sent.
+   limit, and no mail is sent. A page shown again after an error carries a token that is already
+   `cms.contact.min_seconds` old, so the visitor can send it again at once.
 5. Validation: `name` (at most 120 characters), `email` (a valid address, at most 254 characters) and `message` (at
    most 5,000 characters) are required. On failure the page is shown again with the errors and the entered values,
    status `422`. Failed validation does not count toward the IP limit.

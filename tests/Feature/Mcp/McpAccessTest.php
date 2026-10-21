@@ -221,3 +221,25 @@ it('lists every CMS tool over HTTP without an acting user', function (): void {
         ->assertOk()
         ->assertJsonCount(count(CmsTools::TOOLS), 'result.tools');
 });
+
+it('offers the schema types as an enum, and no enum when none are configured', function (array $types, ?array $enum): void {
+    config()->set('cms.schema_types', $types);
+
+    Mcp::web('/internal/mcp', CmsTestServer::class);
+    Route::getRoutes()->refreshNameLookups();
+
+    $tools = collect($this->postJson('/internal/mcp', [
+        'jsonrpc' => '2.0',
+        'id' => 1,
+        'method' => 'tools/list',
+        'params' => [],
+    ], [
+        'Accept' => 'application/json, text/event-stream',
+    ])->assertOk()->json('result.tools'))->keyBy('name');
+
+    expect($tools['page_update']['inputSchema']['properties']['schema_type']['enum'] ?? null)->toBe($enum)
+        ->and($tools['page_draft_create']['inputSchema']['properties']['schema_type']['enum'] ?? null)->toBe($enum);
+})->with([
+    'configured' => [['WebPage', 'AboutPage'], ['WebPage', 'AboutPage']],
+    'none' => [[], null],
+]);

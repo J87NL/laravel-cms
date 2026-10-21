@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use J87NL\Cms\Actions\RecordRevision;
 use J87NL\Cms\Actions\ReorderBlocks;
 use J87NL\Cms\Actions\RestoreRevision;
 use J87NL\Cms\Actions\SavePage;
@@ -103,3 +104,19 @@ test('a reorder that keeps the order records no revision and leaves the cache al
         ->count())->toBe($revisions + 1)
         ->and(pageBlockIds($page))->toBe([$second->id, $first->id]);
 });
+
+test('at least one revision is kept whatever the configured number', function (mixed $configured, int $kept): void {
+    config()->set('cms.revisions.keep', $configured);
+
+    $page = makePage(['title' => 'Kept']);
+    app(SavePage::class)->handle($page, ['title' => 'Kept again'], null);
+
+    expect(RecordRevision::keep())->toBe($kept)
+        ->and(Revision::query()
+            ->where('page_id', $page->id)
+            ->count())->toBe(min($kept, 2));
+})->with([
+    'null' => [null, 1],
+    'zero' => [0, 1],
+    'three' => [3, 3],
+]);

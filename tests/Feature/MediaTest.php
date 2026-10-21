@@ -192,3 +192,34 @@ test('updating media refuses a focal point outside the image', function (string 
     'x below zero' => ['focal_x', -1],
     'y above hundred' => ['focal_y', 101],
 ]);
+
+test('a max upload size of zero switches the size check off', function (): void {
+    config()->set('cms.media.max_upload_kilobytes', 0);
+
+    $asset = app(UploadMedia::class)->handle(UploadedFile::fake()->image('big.jpg', 800, 600)->size(50_000), [
+        'alt' => 'Large',
+    ]);
+
+    expect($asset->exists)->toBeTrue();
+});
+
+test('a failed upload is refused before its size or content is read', function (): void {
+    $file = new UploadedFile(UploadedFile::fake()->image('broken.jpg')->getRealPath(), 'broken.jpg', 'image/jpeg', UPLOAD_ERR_PARTIAL, true);
+
+    expect(fn () => app(UploadMedia::class)->handle($file, [
+        'alt' => 'Broken',
+    ]))->toThrow(ValidationException::class);
+
+    expect(MediaAsset::query()->count())->toBe(0);
+});
+
+test('an upload validates its details', function (array $attributes): void {
+    expect(fn () => app(UploadMedia::class)->handle(UploadedFile::fake()->image('photo.jpg', 800, 600), $attributes))
+        ->toThrow(ValidationException::class);
+
+    expect(MediaAsset::query()->count())->toBe(0);
+})->with([
+    'no alt' => [['caption' => 'Only a caption']],
+    'focal point outside' => [['alt' => 'Photo', 'focal_x' => 150]],
+    'caption too long' => [['alt' => 'Photo', 'caption' => str_repeat('a', 501)]],
+]);
