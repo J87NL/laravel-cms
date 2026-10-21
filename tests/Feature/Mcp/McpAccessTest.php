@@ -7,24 +7,33 @@ use J87NL\Cms\CmsPermission;
 use J87NL\Cms\Enums\PageStatus;
 use J87NL\Cms\Facades\Cms;
 use J87NL\Cms\Mcp\CmsTools;
+use J87NL\Cms\Mcp\Tools\BlockAddLiveTool;
 use J87NL\Cms\Mcp\Tools\BlockAddTool;
+use J87NL\Cms\Mcp\Tools\BlockRemoveLiveTool;
 use J87NL\Cms\Mcp\Tools\BlockRemoveTool;
+use J87NL\Cms\Mcp\Tools\BlocksReorderLiveTool;
 use J87NL\Cms\Mcp\Tools\BlocksReorderTool;
+use J87NL\Cms\Mcp\Tools\BlockUpdateLiveTool;
 use J87NL\Cms\Mcp\Tools\BlockUpdateTool;
 use J87NL\Cms\Mcp\Tools\MediaListTool;
 use J87NL\Cms\Mcp\Tools\MenuItemSaveTool;
 use J87NL\Cms\Mcp\Tools\MenuItemsListTool;
 use J87NL\Cms\Mcp\Tools\PageDraftCreateTool;
 use J87NL\Cms\Mcp\Tools\PageGetTool;
+use J87NL\Cms\Mcp\Tools\PagePublishTool;
 use J87NL\Cms\Mcp\Tools\PagesListTool;
+use J87NL\Cms\Mcp\Tools\PageUnpublishTool;
+use J87NL\Cms\Mcp\Tools\PageUpdateLiveTool;
 use J87NL\Cms\Mcp\Tools\PageUpdateTool;
 use J87NL\Cms\Mcp\Tools\RedirectDeleteTool;
 use J87NL\Cms\Mcp\Tools\RedirectSaveTool;
 use J87NL\Cms\Mcp\Tools\RedirectsListTool;
+use J87NL\Cms\Mcp\Tools\RevisionDiscardTool;
 use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\MenuItem;
 use J87NL\Cms\Models\Page;
 use J87NL\Cms\Models\Redirect;
+use J87NL\Cms\Models\Revision;
 use J87NL\Cms\Tests\Fixtures\Mcp\CmsTestServer;
 use Laravel\Mcp\Facades\Mcp;
 use Laravel\Mcp\Server\Tool;
@@ -47,6 +56,20 @@ function cmsWriteTools(): array
 
             return ['page_id' => $page->id, 'block_ids' => [$second->id, $first->id]];
         }],
+        'page_update_live' => [PageUpdateLiveTool::class, CmsPermission::PagesPublish, fn (): array => ['page_id' => makePage(['title' => 'Live'])->id, 'title' => 'Ander']],
+        'block_add_live' => [BlockAddLiveTool::class, CmsPermission::PagesPublish, fn (): array => ['page_id' => makePage(['title' => 'Live'])->id, 'type' => 'rich_text', 'data' => ['html' => '<p>Hoi</p>']]],
+        'block_update_live' => [BlockUpdateLiveTool::class, CmsPermission::PagesPublish, fn (): array => ['block_id' => addBlock(makePage(['title' => 'Live']), 'rich_text', ['html' => '<p>Oud</p>'])->id, 'data' => ['html' => '<p>Nieuw</p>']]],
+        'block_remove_live' => [BlockRemoveLiveTool::class, CmsPermission::PagesPublish, fn (): array => ['block_id' => addBlock(makePage(['title' => 'Live']), 'rich_text', ['html' => '<p>Oud</p>'])->id]],
+        'blocks_reorder_live' => [BlocksReorderLiveTool::class, CmsPermission::PagesPublish, function (): array {
+            $page = makePage(['title' => 'Live']);
+            $first = addBlock($page, 'rich_text', ['html' => '<p>Een</p>']);
+            $second = addBlock($page, 'rich_text', ['html' => '<p>Twee</p>']);
+
+            return ['page_id' => $page->id, 'block_ids' => [$second->id, $first->id]];
+        }],
+        'page_publish' => [PagePublishTool::class, CmsPermission::PagesPublish, fn (): array => ['page_id' => makePage(['title' => 'Concept'], PageStatus::Draft)->id]],
+        'page_unpublish' => [PageUnpublishTool::class, CmsPermission::PagesPublish, fn (): array => ['page_id' => makePage(['title' => 'Live', 'slug' => 'live'])->id]],
+        'revision_discard' => [RevisionDiscardTool::class, CmsPermission::PagesPublish, fn (): array => ['page_id' => pendingPage()->id]],
         'menu_item_save' => [MenuItemSaveTool::class, CmsPermission::Menus, fn (): array => ['menu' => 'main', 'url' => '/contact', 'label' => 'Contact']],
         'redirect_save' => [RedirectSaveTool::class, CmsPermission::Redirects, fn (): array => ['from_path' => '/oud', 'to' => '/nieuw']],
         'redirect_delete' => [RedirectDeleteTool::class, CmsPermission::Redirects, fn (): array => ['redirect_id' => makeRedirect('oud', '/nieuw')->id]],
@@ -84,6 +107,12 @@ function cmsContentCounts(): array
     return [
         'pages' => $pages->count(),
         'titles' => $pages->pluck('title')->implode('|'),
+        'statuses' => $pages->map(fn (Page $page): string => $page->status->value)->implode('|'),
+        'pending_revisions' => Revision::query()
+            ->pending()
+            ->get()
+            ->map(fn (Revision $revision): string => (string) json_encode($revision->snapshot))
+            ->implode('|'),
         'blocks' => $blocks->pluck('id')->implode(','),
         'block_data' => $blocks->map(fn (Block $block): string => (string) json_encode($block->data))->implode('|'),
         'menu_items' => MenuItem::query()
@@ -102,7 +131,19 @@ it('registers every CMS tool with explicit read-only and destructive hints', fun
     expect($annotations->filter(fn (array $hints): bool => $hints['readOnlyHint'])->keys()->all())
         ->toEqualCanonicalizing(['pages_list', 'page_get', 'media_list', 'menu_items_list', 'redirects_list'])
         ->and($annotations->filter(fn (array $hints): bool => $hints['destructiveHint'])->keys()->all())
-        ->toEqualCanonicalizing(['block_remove', 'menu_item_save', 'redirect_delete']);
+        ->toEqualCanonicalizing([
+            'block_remove',
+            'page_update_live',
+            'block_add_live',
+            'block_update_live',
+            'block_remove_live',
+            'blocks_reorder_live',
+            'page_publish',
+            'page_unpublish',
+            'revision_discard',
+            'menu_item_save',
+            'redirect_delete',
+        ]);
 });
 
 it('refuses every tool without an acting user', function (string $tool, CmsPermission $permission, Closure $arguments): void {
@@ -160,7 +201,7 @@ it('runs write tools under a full grant', function (string $tool, CmsPermission 
 
     hubGrant('full');
 
-    CmsTestServer::actingAs(cmsUser($permission))
+    CmsTestServer::actingAs(cmsUser($permission, CmsPermission::PagesEdit))
         ->tool($tool, $input)
         ->assertOk();
 })->with(cmsWriteTools());

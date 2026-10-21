@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use J87NL\Cms\Enums\PageStatus;
 
@@ -33,6 +34,7 @@ use J87NL\Cms\Enums\PageStatus;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Page|null $parent
+ * @property-read Revision|null $pendingRevision
  */
 class Page extends Model
 {
@@ -127,6 +129,17 @@ class Page extends Model
     public function revisions(): HasMany
     {
         return $this->hasMany(Revision::class)
+            ->where('is_pending', false)
+            ->orderByDesc('id');
+    }
+
+    /**
+     * @return HasOne<Revision, $this>
+     */
+    public function pendingRevision(): HasOne
+    {
+        return $this->hasOne(Revision::class)
+            ->where('is_pending', true)
             ->orderByDesc('id');
     }
 

@@ -28,6 +28,8 @@ of the revision and may be `null`.
 | `SavePage` | `handle(Page $page, array $attributes, ?int $userId): Page` | Yes |
 | `MovePage` | `handle(Page $page, Page $target, string $position, ?int $userId): void` | Yes |
 | `ChangePageStatus` | `handle(Page $page, PageStatus $status, ?int $userId): void` | Yes |
+| `PublishPage` | `handle(Page $page, ?int $userId): void` | Yes |
+| `DiscardPendingRevision` | `handle(Page $page): bool` | No |
 | `MakeHomePage` | `handle(Page $page): void` | No |
 | `SchedulePage` | `handle(Page $page, ?Carbon $publishAt, ?Carbon $unpublishAt): void` | No |
 | `DeletePage` | `handle(Page $page): void` | No |
@@ -37,6 +39,11 @@ Helpers for an admin that wants to disable a button beforehand:
 - `DeletePage::blockedReason(Page $page): ?string`
 - `ChangePageStatus::unpublishBlockedReason(Page $page): ?string`
 - `MakeHomePage::blockedReason(Page $page): ?string` (an instance method)
+
+`PublishPage` applies the page's pending revision and publishes the page when it is not published yet, see
+[Pending revisions](revisions.md#pending-revisions). `DiscardPendingRevision` returns `false` when there was no pending
+revision. `ChangePageStatus::applyLocked(Page $locked, PageStatus $status, ?int $userId)` changes the status of a page
+whose row the caller has already locked, inside the caller's transaction and home page lock.
 
 `SavePage::apply(Page $page, array $attributes): void` saves without recording a revision. `MovePage` takes
 `MovePage::BEFORE`, `MovePage::AFTER` or `MovePage::INSIDE` as position; anything else throws an
@@ -64,7 +71,7 @@ keeps the current order changes nothing and records no revision.
 | Action | Signature |
 |---|---|
 | `RecordRevision` | `handle(Page $page, ?int $userId): Revision` |
-| `RestoreRevision` | `handle(Revision $revision, ?int $userId): Page` |
+| `RestoreRevision` | `handle(Revision $revision, ?int $userId): Page` (refuses a pending revision) |
 
 `RecordRevision::snapshot(Page $page): array` returns the snapshot without storing it, and `RecordRevision::keep()`
 the number of revisions kept per page (`cms.revisions.keep`, at least 1). See [Revisions](revisions.md).

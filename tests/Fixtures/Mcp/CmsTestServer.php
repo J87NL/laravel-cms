@@ -13,6 +13,8 @@ use Laravel\Mcp\Server\Attributes\Version;
 #[Version('1.0.0')]
 class CmsTestServer extends Server
 {
+    public int $defaultPaginationLength = 50;
+
     protected function boot(): void
     {
         $this->tools = [

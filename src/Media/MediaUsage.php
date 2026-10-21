@@ -9,6 +9,7 @@ use J87NL\Cms\Blocks\ReferencesMedia;
 use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\MediaAsset;
 use J87NL\Cms\Models\Page;
+use J87NL\Cms\Models\Revision;
 use J87NL\Cms\Models\SiteSettings;
 
 class MediaUsage
@@ -44,6 +45,32 @@ class MediaUsage
                 });
         }
 
+        $pendingImageIds = [];
+
+        Revision::query()
+            ->pending()
+            ->select([
+                'id',
+                'snapshot',
+            ])
+            ->lazyById(200)
+            ->each(function (Revision $revision) use ($types, &$counts, &$pendingImageIds): void {
+                foreach ($revision->snapshot['blocks'] as $block) {
+                    $type = $types[(string) ($block['type'] ?? '')] ?? null;
+                    $data = $block['data'] ?? null;
+
+                    if (is_null($type) || ! is_array($data)) {
+                        continue;
+                    }
+
+                    foreach (array_unique($type->mediaIds($data)) as $id) {
+                        $counts[$id] = ($counts[$id] ?? 0) + 1;
+                    }
+                }
+
+                $pendingImageIds[] = $revision->snapshot['page']['og_image_id'] ?? null;
+            });
+
         $settings = SiteSettings::current();
 
         $referencedIds = [
@@ -51,6 +78,7 @@ class MediaUsage
                 ->whereNotNull('og_image_id')
                 ->pluck('og_image_id')
                 ->all(),
+            ...$pendingImageIds,
             $settings->og_image_id,
             $settings->entity_image_id,
         ];

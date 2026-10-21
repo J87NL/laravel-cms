@@ -96,13 +96,22 @@ The package ships CMS tools on [`laravel/mcp`](https://github.com/laravel/mcp), 
 | `block_update` | no | no | `cms.pages.edit` |
 | `block_remove` | no | yes | `cms.pages.edit` |
 | `blocks_reorder` | no | no | `cms.pages.edit` |
+| `page_update_live` | no | yes | `cms.pages.edit`, `cms.pages.publish` |
+| `block_add_live` | no | yes | `cms.pages.edit`, `cms.pages.publish` |
+| `block_update_live` | no | yes | `cms.pages.edit`, `cms.pages.publish` |
+| `block_remove_live` | no | yes | `cms.pages.edit`, `cms.pages.publish` |
+| `blocks_reorder_live` | no | yes | `cms.pages.edit`, `cms.pages.publish` |
+| `page_publish` | no | yes | `cms.pages.edit`, `cms.pages.publish` |
+| `page_unpublish` | no | yes | `cms.pages.edit`, `cms.pages.publish` |
+| `revision_discard` | no | yes | `cms.pages.edit`, `cms.pages.publish` |
 | `menu_item_save` | no | yes | `cms.menus` |
 | `redirect_save` | no | no | `cms.redirects` |
 | `redirect_delete` | no | yes | `cms.redirects` |
 
-- No tool publishes, unpublishes, schedules, makes a home page, deletes pages or uploads media. Publishing stays in the CMS admin.
-- Page and block writes only act on draft or unpublished pages without a planned publication (`publish_at`), also for users who may publish. When the app defines the `cms.pages.write` gate (as `j87nl/laravel-vue-cms` does), the tools check it as well.
-- Writes go through the same actions and validation rules as the admin (`J87NL\Cms\Validation\PageRules` and `RedirectRules`), so validation, sanitizing, revisions and cache invalidation are the same. Menu items and redirects take effect on the live website immediately, which is why `menu_item_save` is marked destructive, like `block_remove` and `redirect_delete`: the hub starts destructive tools disabled until an admin enables them.
+- No tool schedules, makes a home page, deletes pages or uploads media. Scheduling stays in the CMS admin.
+- The draft tools (`page_update`, `block_add`, `block_update`, `block_remove`, `blocks_reorder`) change a draft or unpublished page directly. On a published page they collect the changes in one pending revision; the live page stays as it is until `page_publish` or the admin publishes it. The `_live` tools change the page directly, also when it is published, and need `cms.pages.publish`. See [MCP tools](docs/mcp-tools.md#draft-and-live-mode).
+- Pages with a planned publication (`publish_at`) are read-only for every page and block tool. When the app defines the `cms.pages.write` gate (as `j87nl/laravel-vue-cms` does), direct writes check it as well; draft writes into a pending revision do not.
+- Writes go through the same actions and validation rules as the admin (`J87NL\Cms\Validation\PageRules` and `RedirectRules`), so validation, sanitizing, revisions and cache invalidation are the same. Every tool that changes what visitors see is marked destructive (the `_live` tools, `page_publish`, `page_unpublish`, `menu_item_save` and `redirect_delete`), like `block_remove` and `revision_discard`, which throw content away: the hub starts destructive tools disabled until an admin enables them.
 - Every tool runs as the authenticated user and checks the CMS permission above. A missing user or permission returns an error result with a sentence, never an exception.
 - Only a request with the header `X-J87-Grant-Level: full` may run tools that are not read-only. A missing header, `read` or any other value only allows the read-only tools.
 
@@ -125,6 +134,8 @@ class SiteServer extends Server
     }
 }
 ```
+
+The package ships 22 tools, more than the 15 that `laravel/mcp` lists per `tools/list` page by default. Set `public int $defaultPaginationLength = 50;` on the server when the hub does not follow `nextCursor`.
 
 `boot()` runs before every request is handled. Keep the server's own instructions in the `$instructions` property: an `#[Instructions]` attribute takes precedence over the property and would drop the CMS guidance.
 

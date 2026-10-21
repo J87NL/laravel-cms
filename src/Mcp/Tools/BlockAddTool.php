@@ -8,7 +8,6 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use J87NL\Cms\Actions\SaveBlock;
 use J87NL\Cms\Blocks\BlockRegistry;
-use J87NL\Cms\CmsPermission;
 use J87NL\Cms\Mcp\CmsPresenter;
 use J87NL\Cms\Mcp\Concerns\InteractsWithCms;
 use J87NL\Cms\Models\Block;
@@ -34,12 +33,17 @@ class BlockAddTool extends Tool
 
     public function description(): string
     {
-        return sprintf('Adds a content block at the end of a draft or unpublished page; reorder with blocks_reorder. Published pages and pages with a planned publication are refused: change those in the CMS admin. Rich text is HTML and is cleaned the same way as in the admin. Images are referenced by their id from media_list (media_id, media_ids). %s', $this->blockTypesSummary());
+        return sprintf('%s Rich text is HTML and is cleaned the same way as in the admin. Images are referenced by their id from media_list (media_id, media_ids). %s', $this->modeDescription(), $this->blockTypesSummary());
+    }
+
+    protected function modeDescription(): string
+    {
+        return 'Adds a content block at the end of a page; reorder with blocks_reorder. On a published page the block is added to the pending revision of the page (with a negative id until it is published) and the live page stays as it is until page_publish; on a draft or unpublished page it is added directly. Pages with a planned publication are refused. To add a block to a published page directly, use block_add_live.';
     }
 
     public function handle(Request $request, SaveBlock $saveBlock, BlockRegistry $registry): Response|ResponseFactory
     {
-        $user = $this->authorizeWrite($request, CmsPermission::PagesEdit);
+        $user = $this->authorizePageWrite($request);
 
         if ($user instanceof Response) {
             return $user;
@@ -59,6 +63,14 @@ class BlockAddTool extends Tool
             }
 
             $data = $this->validateBlockData($type, $input['data']);
+
+            if ($this->writesPending($page)) {
+                [$revision, $added] = $this->pendingEditor()->addBlock($page, $type, $data, $this->userId($user));
+
+                return $this->pendingResponse($page, $revision, sprintf('Block %d (%s) is added to the pending revision of page "%s".', $added['id'], $type->key(), $page->title), [
+                    'block' => $this->presenter->pendingBlock($added),
+                ]);
+            }
 
             $block = $saveBlock->handle($page, new Block, $type, $data, $this->userId($user));
 

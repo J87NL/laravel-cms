@@ -27,28 +27,33 @@ class ChangePageStatus
                     ->lockForUpdate()
                     ->findOrFail($page->id);
 
-                if ($locked->status === $status) {
-                    return;
-                }
-
-                $reason = $status === PageStatus::Published ? null : self::unpublishBlockedReason($locked);
-
-                if (! is_null($reason)) {
-                    throw ValidationException::withMessages([
-                        'page' => $reason,
-                    ]);
-                }
-
-                $locked->status = $status;
-                $locked->save();
-
-                $this->assignHomeWhenMissing($locked);
-
-                $this->recordRevision->handle($locked, $userId);
+                $this->applyLocked($locked, $status, $userId);
 
                 $page->setRawAttributes($locked->getAttributes(), true);
             });
         });
+    }
+
+    public function applyLocked(Page $locked, PageStatus $status, ?int $userId): void
+    {
+        if ($locked->status === $status) {
+            return;
+        }
+
+        $reason = $status === PageStatus::Published ? null : self::unpublishBlockedReason($locked);
+
+        if (! is_null($reason)) {
+            throw ValidationException::withMessages([
+                'page' => $reason,
+            ]);
+        }
+
+        $locked->status = $status;
+        $locked->save();
+
+        $this->assignHomeWhenMissing($locked);
+
+        $this->recordRevision->handle($locked, $userId);
     }
 
     public static function unpublishBlockedReason(Page $page): ?string

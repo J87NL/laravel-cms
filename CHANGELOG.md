@@ -4,6 +4,24 @@ All notable changes to this package are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- Pending revisions: a published page can hold one pending revision (`cms_revisions.is_pending`) with changes that are not live yet. `Page::pendingRevision()`, the `Revision` scopes `history()` and `pending()`, and `J87NL\Cms\Pages\PendingRevisionEditor` to change it.
+- `PublishPage` applies the pending revision of a page (blocks matched by id) and publishes a page that is not published yet. `DiscardPendingRevision` throws a pending revision away.
+- `ChangePageStatus::applyLocked()` changes the status of a page whose row the caller already locked.
+- MCP tools `page_update_live`, `block_add_live`, `block_update_live`, `block_remove_live` and `blocks_reorder_live` change a page directly, also when it is published. They need `cms.pages.publish` and are marked destructive.
+- MCP tools `page_publish`, `page_unpublish` and `revision_discard`, marked destructive, with the same permissions as the admin's publication buttons.
+- `pages_list` and `page_get` report `has_pending_revision`; `page_get` returns `pending_revision`.
+
+### Changed
+
+- The MCP draft tools (`page_update`, `block_add`, `block_update`, `block_remove`, `blocks_reorder`) no longer refuse a published page: they store the change in its pending revision and leave the live page, the revision history and the page cache alone. They skip the `cms.pages.write` gate for those writes. `block_update` and `block_remove` take an optional `page_id` for blocks that only exist in the pending revision.
+- `writable` in `pages_list` and `page_get` is only `false` for a page with a planned publication.
+- Revision snapshots store the block `id`.
+- `Page::revisions()` and revision pruning leave out the pending revision, and `RestoreRevision` refuses it.
+- `MediaUsage` counts images used in pending revisions, so they cannot be deleted.
+- The package now ships 22 MCP tools; set `$defaultPaginationLength = 50` on the app's MCP server when the client does not page through `tools/list`.
+
 ## [0.2.2] - 2026-10-21
 
 ### Added
