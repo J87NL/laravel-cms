@@ -21,25 +21,38 @@ class ContactFormGuard
 
     public function looksHuman(Request $request, int $blockId): bool
     {
+        return $this->verdict($request, $blockId) === ContactFormVerdict::Human;
+    }
+
+    public function verdict(Request $request, int $blockId): ContactFormVerdict
+    {
         if (trim((string) $request->input(self::HONEYPOT, '')) !== '') {
-            return false;
+            return ContactFormVerdict::Bot;
         }
 
         $parts = explode('.', (string) $request->input(self::TIMESTAMP, ''), 2);
 
         if (count($parts) !== 2 || ! ctype_digit($parts[0])) {
-            return false;
+            return ContactFormVerdict::Bot;
         }
 
         $time = (int) $parts[0];
 
         if (! hash_equals($this->signature($blockId, $time), $parts[1])) {
-            return false;
+            return ContactFormVerdict::Bot;
         }
 
         $age = now()->getTimestamp() - $time;
 
-        return $age >= (int) config('cms.contact.min_seconds', 3) && $age <= (int) config('cms.contact.max_seconds', 172800);
+        if ($age < (int) config('cms.contact.min_seconds', 3)) {
+            return ContactFormVerdict::Bot;
+        }
+
+        if ($age > (int) config('cms.contact.max_seconds', 172800)) {
+            return ContactFormVerdict::Expired;
+        }
+
+        return ContactFormVerdict::Human;
     }
 
     private function signature(int $blockId, int $time): string

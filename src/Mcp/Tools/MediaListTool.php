@@ -55,8 +55,8 @@ class MediaListTool extends Tool
         $paginator = MediaAsset::query()
             ->with('media')
             ->when($search !== '', fn ($query) => $query->where(fn ($inner) => $inner
-                ->whereRaw("alt like ? escape '!'", [$this->likePattern($search)])
-                ->orWhereRaw("caption like ? escape '!'", [$this->likePattern($search)])))
+                ->whereRaw($this->likeClause($inner, 'alt'), [$this->likePattern($search)])
+                ->orWhereRaw($this->likeClause($inner, 'caption'), [$this->likePattern($search)])))
             ->orderByDesc('id')
             ->paginate((int) ($data['per_page'] ?? self::PER_PAGE_DEFAULT), ['*'], 'page', (int) ($data['page'] ?? 1));
 

@@ -100,6 +100,22 @@ See [Page cache](page-cache.md).
 
 See [Previews](previews.md) and [Scheduling](scheduling.md).
 
+## Schema types
+
+```php
+'schema_types' => [
+    'WebPage',
+    'AboutPage',
+    'ContactPage',
+    'CollectionPage',
+    'FAQPage',
+],
+```
+
+The schema.org types a page may have as its `schema_type`. `PageRules` refuses any other value, the MCP tools offer
+these, and the admin of `j87nl/laravel-vue-cms` lists them. A page without a type uses `WebPage`. See
+[SEO tags and JSON-LD](seo.md).
+
 ## robots.txt
 
 ```php
@@ -147,6 +163,7 @@ See [Security](security.md#security-headers).
     'global_per_hour' => 30,
     'min_seconds' => 3,
     'max_seconds' => 172800,
+    'sent_query' => 'verzonden',
 ],
 ```
 
@@ -156,7 +173,8 @@ See [Security](security.md#security-headers).
 | `contact.per_hour` | `5` | Submissions per IP address per hour |
 | `contact.global_per_hour` | `30` | Mails sent per hour for the whole site |
 | `contact.min_seconds` | `3` | A form posted sooner after rendering counts as a bot |
-| `contact.max_seconds` | `172800` | A form posted later than this after rendering counts as a bot (48 hours) |
+| `contact.max_seconds` | `172800` | A form posted later than this after rendering has expired (48 hours): the visitor is asked to send it again |
+| `contact.sent_query` | `'verzonden'` | The query parameter of the address the visitor returns to after sending |
 
 See [Contact form](contact-form.md).
 
@@ -178,7 +196,7 @@ See [Contact form](contact-form.md).
 | Key | Default | Purpose |
 |---|---|---|
 | `media.disk` | `'public'` | Filesystem disk of the media collection |
-| `media.max_upload_kilobytes` | `10240` | Not read by this package. `UploadMedia` does not check the file size, so validate it where you accept the upload. The media screen of `j87nl/laravel-vue-cms` uses it as its upload limit |
+| `media.max_upload_kilobytes` | `10240` | Largest upload in kilobytes. `UploadMedia` refuses a larger file; `0` switches the check off |
 | `media.max_pixels` | `40000000` | Largest image in pixels (width times height) that an upload may have |
 | `media.widths` | `[480, 960, 1600]` | Widths of the WebP conversions |
 

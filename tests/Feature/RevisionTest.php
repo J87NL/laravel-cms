@@ -2,8 +2,10 @@
 
 declare(strict_types=1);
 
+use J87NL\Cms\Actions\ReorderBlocks;
 use J87NL\Cms\Actions\RestoreRevision;
 use J87NL\Cms\Actions\SavePage;
+use J87NL\Cms\Cache\PageCache;
 use J87NL\Cms\Models\Revision;
 
 test('restoring a revision restores the page fields and blocks', function (): void {
@@ -74,4 +76,30 @@ test('only the latest twenty revisions are kept per page', function (): void {
         ->and($kept->first()->snapshot['page']['title'])->toBe('Version 6')
         ->and(Revision::query()
             ->where('page_id', $other->id)->count())->toBe(1);
+});
+
+test('a reorder that keeps the order records no revision and leaves the cache alone', function (): void {
+    $page = makePage(['title' => 'Order']);
+    $first = addBlock($page, 'rich_text', ['html' => '<p>One</p>']);
+    $second = addBlock($page, 'rich_text', ['html' => '<p>Two</p>']);
+
+    $revisions = Revision::query()
+        ->where('page_id', $page->id)
+        ->count();
+    $version = app(PageCache::class)->version();
+
+    app(ReorderBlocks::class)->handle($page, [$first->id, $second->id], null);
+    app(ReorderBlocks::class)->move($page, $first->id, $first->id, null);
+
+    expect(Revision::query()
+        ->where('page_id', $page->id)
+        ->count())->toBe($revisions)
+        ->and(app(PageCache::class)->version())->toBe($version);
+
+    app(ReorderBlocks::class)->handle($page, [$second->id, $first->id], null);
+
+    expect(Revision::query()
+        ->where('page_id', $page->id)
+        ->count())->toBe($revisions + 1)
+        ->and(pageBlockIds($page))->toBe([$second->id, $first->id]);
 });

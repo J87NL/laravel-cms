@@ -46,6 +46,22 @@ does. `Menu::forKey(string $key)` returns the menu with that key and creates it 
 
 Deleting a page deletes the menu items that link to it.
 
+## Reordering and deleting items
+
+```php
+use J87NL\Cms\Actions\DeleteMenuItem;
+use J87NL\Cms\Actions\ReorderMenuItems;
+
+app(ReorderMenuItems::class)->move($menu, itemId: $item->id, toItemId: $other->id);
+
+app(DeleteMenuItem::class)->handle($menu, $item);
+```
+
+`ReorderMenuItems::move(Menu $menu, int $itemId, int $toItemId)` moves an item to the position of another item of the
+same menu and numbers the items of the menu from 1. `DeleteMenuItem::handle(Menu $menu, MenuItem $item)` deletes the
+item and the items below it. Both throw an `InvalidArgumentException` for an item of another menu, and both flush the
+[page cache](page-cache.md) once.
+
 ## Visibility
 
 An item that links to a page only shows while that page and all its ancestors are published. An item with a URL

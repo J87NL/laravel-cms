@@ -45,6 +45,14 @@ return [
         'enabled' => true,
     ],
 
+    'schema_types' => [
+        'WebPage',
+        'AboutPage',
+        'ContactPage',
+        'CollectionPage',
+        'FAQPage',
+    ],
+
     'robots' => [
         'disallow' => [
             '/admin',
@@ -67,6 +75,7 @@ return [
         'global_per_hour' => 30,
         'min_seconds' => 3,
         'max_seconds' => 172800,
+        'sent_query' => 'verzonden',
     ],
 
     'media' => [

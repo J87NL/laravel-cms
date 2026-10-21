@@ -53,7 +53,7 @@ class RedirectsListTool extends Tool
         $from = Str::lower(trim((string) ($data['from'] ?? ''), " \t\n\r\0\x0B/"));
 
         $paginator = Redirect::query()
-            ->when($from !== '', fn ($query) => $query->whereRaw("from_path like ? escape '!'", [$this->likePattern($from)]))
+            ->when($from !== '', fn ($query) => $query->whereRaw($this->likeClause($query, 'from_path'), [$this->likePattern($from)]))
             ->orderBy('from_path')
             ->paginate((int) ($data['per_page'] ?? self::PER_PAGE_DEFAULT), ['*'], 'page', (int) ($data['page'] ?? 1));
 

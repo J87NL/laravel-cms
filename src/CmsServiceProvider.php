@@ -80,6 +80,7 @@ class CmsServiceProvider extends ServiceProvider
         $this->app->singleton(SitemapRegistry::class, fn (Application $app): SitemapRegistry => (new SitemapRegistry($app))->contribute(PageSitemapContributor::class));
         $this->app->singleton(Cms::class);
         $this->app->singleton(RecordPathRedirects::class);
+        $this->app->singleton(FlushPageCache::class);
         $this->app->scoped(BlockTypeSummary::class);
 
         $this->registerPermissions();

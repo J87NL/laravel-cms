@@ -10,7 +10,10 @@ abstract class AbstractBlockType implements BlockType
 {
     public function label(): string
     {
-        return sprintf('cms::blocks.%s.label', $this->key());
+        $key = sprintf('cms::blocks.%s.label', $this->key());
+        $label = __($key);
+
+        return is_string($label) ? $label : $key;
     }
 
     public function rules(): array

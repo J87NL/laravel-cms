@@ -37,16 +37,20 @@ handles it in this order:
 2. When the visitor's IP address has reached `cms.contact.per_hour` submissions in the past hour, the page is shown
    again with an error, status `429` and a `Retry-After` header.
 3. The bot check: the honeypot field `website` must be empty, and the hidden `form_token` must carry a valid
-   signature for this block and be between `cms.contact.min_seconds` and `cms.contact.max_seconds` old. A submission
-   that fails counts toward the IP limit and gets the same redirect as a sent message, but no mail is sent.
-4. Validation: `name` (at most 120 characters), `email` (a valid address, at most 254 characters) and `message` (at
+   signature for this block and be at least `cms.contact.min_seconds` old. A submission that fails counts toward the
+   IP limit and gets the same redirect as a sent message, but no mail is sent.
+4. A genuine token older than `cms.contact.max_seconds` has expired. The page is shown again with the message
+   `cms::blocks.contact_form.expired`, the entered values and a fresh token, status `422`. It counts toward the IP
+   limit, and no mail is sent.
+5. Validation: `name` (at most 120 characters), `email` (a valid address, at most 254 characters) and `message` (at
    most 5,000 characters) are required. On failure the page is shown again with the errors and the entered values,
    status `422`. Failed validation does not count toward the IP limit.
-5. Without a recipient, the page is shown again with an error, status `503`.
-6. When the site has sent `cms.contact.global_per_hour` mails in the past hour, the page is shown again with an
+6. Without a recipient, the page is shown again with an error, status `503`.
+7. When the site has sent `cms.contact.global_per_hour` mails in the past hour, the page is shown again with an
    error, status `429`.
-7. The mail is queued, the submission counts toward the IP limit, and the visitor is redirected (`303`) to
-   `{page}?verzonden={block id}#contact-{block id}`, where the block shows the success message.
+8. The mail is queued, the submission counts toward the IP limit, and the visitor is redirected (`303`) to
+   `{page}?verzonden={block id}#contact-{block id}`, where the block shows the success message. Set
+   `cms.contact.sent_query` to use another name than `verzonden` for that query parameter.
 
 The route also has `throttle:30,1`, which limits all posts to this route to 30 per minute per IP address.
 
@@ -61,8 +65,11 @@ open forms.
 
 The token is part of the page HTML, so a page served from the [page cache](page-cache.md) carries the token from the
 moment it was rendered. Keep `cms.cache.ttl` (default 86,400 seconds) well below `cms.contact.max_seconds` (default
-172,800 seconds). Otherwise a visitor can get a cached form whose token is already too old, and the submission
-silently fails the bot check: the visitor sees the success message, but no mail is sent.
+172,800 seconds). Otherwise a visitor can get a cached form whose token has already expired, and has to send the form
+a second time.
+
+`ContactFormGuard::verdict(Request $request, int $blockId)` returns a `J87NL\Cms\Contact\ContactFormVerdict`:
+`Human`, `Bot` or `Expired`. `looksHuman()` is true only for `Human`.
 
 ## The mail
 

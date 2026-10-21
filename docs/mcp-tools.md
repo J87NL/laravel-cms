@@ -76,7 +76,7 @@ the live website immediately.
 
 | Tool | Arguments |
 |---|---|
-| `page_draft_create` | `title` (required), `slug`, `parent_id`, `menu_title`, `meta_title`, `meta_description`, `og_image_id`, `canonical_url`, `noindex` |
+| `page_draft_create` | `title` (required), `slug`, `parent_id`, `menu_title`, `meta_title`, `meta_description`, `og_image_id`, `canonical_url`, `noindex`, `schema_type` (one of `cms.schema_types`) |
 | `page_update` | `page_id` (required) and any of the fields above; only passed fields change |
 | `block_add` | `page_id`, `type`, `data` (all required). The block is added at the end |
 | `block_update` | `block_id`, `data` (both required). Pass every field; the type cannot change |
@@ -86,8 +86,10 @@ the live website immediately.
 | `redirect_save` | `redirect_id`, `from_path` and `to` (required), `status_code` (`301` or `302`). A new redirect defaults to `301`; on an update, an omitted status code keeps its current value |
 | `redirect_delete` | `redirect_id` |
 
-The descriptions of `block_add` and `block_update` list the registered block types and their data fields, built from
-each type's `rules()`, so custom block types appear there too.
+The descriptions of `block_add` and `block_update` list the registered block types with their translated label and
+their data fields, built from each type's `label()` and `rules()`, so custom block types appear there too.
+
+`blocks_reorder` with the current order changes nothing and records no revision.
 
 ## Rules the tools follow
 

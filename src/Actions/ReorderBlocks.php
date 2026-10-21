@@ -24,11 +24,14 @@ class ReorderBlocks
         DB::transaction(function () use ($page, $blockIds, $userId): void {
             $blocks = Block::query()
                 ->where('page_id', $page->id)
+                ->orderBy('sort_order')
+                ->orderBy('id')
                 ->get()
                 ->keyBy('id');
 
-            $currentIds = array_map('intval', $blocks->keys()->all());
-            $requestedIds = $blockIds;
+            $orderedIds = array_map('intval', $blocks->keys()->all());
+            $currentIds = $orderedIds;
+            $requestedIds = array_values($blockIds);
 
             sort($currentIds);
             sort($requestedIds);
@@ -39,10 +42,17 @@ class ReorderBlocks
                 ]);
             }
 
+            if (array_values($blockIds) === $orderedIds) {
+                return;
+            }
+
             foreach (array_values($blockIds) as $position => $id) {
                 $block = $blocks->get($id);
                 $block->sort_order = $position + 1;
-                $block->save();
+
+                if ($block->isDirty('sort_order')) {
+                    $block->save();
+                }
             }
 
             $this->recordRevision->handle($page, $userId);

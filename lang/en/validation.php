@@ -32,4 +32,5 @@ return [
     'menu_item_has_children' => 'This item has items below it and cannot be placed under another item.',
     'block_order_incomplete' => 'List every block of the page exactly once.',
     'menu_label_required' => 'Enter a label for a link to an address.',
+    'media_too_large' => 'This file is larger than :max kB. Upload a smaller image.',
 ];

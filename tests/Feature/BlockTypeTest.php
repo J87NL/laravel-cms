@@ -7,6 +7,7 @@ use J87NL\Cms\Blocks\AbstractBlockType;
 use J87NL\Cms\Blocks\BlockContext;
 use J87NL\Cms\Blocks\BlockRegistry;
 use J87NL\Cms\Facades\Cms;
+use J87NL\Cms\Mcp\BlockTypeSummary;
 use J87NL\Cms\Models\Block;
 use J87NL\Cms\Rules\SafeLink;
 
@@ -156,3 +157,21 @@ test('links must be safe paths or safe schemes', function (string $link, bool $p
     ['\\\\evil.example', false],
     ['javascript:alert(1)', false],
 ]);
+
+test('block types return their translated label', function (): void {
+    app()->setLocale('nl');
+
+    $label = app(BlockRegistry::class)->find('rich_text')->label();
+
+    expect($label)->toBe(trans('cms::blocks.rich_text.label', [], 'nl'))
+        ->and($label)->not->toBe('cms::blocks.rich_text.label');
+});
+
+test('the MCP block summary names each type with its translated label', function (): void {
+    app()->setLocale('en');
+
+    expect(app(BlockTypeSummary::class)->text())
+        ->toContain('rich_text "Text" (')
+        ->toContain('contact_form "Contact form" (')
+        ->not->toContain('cms::blocks.');
+});

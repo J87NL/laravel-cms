@@ -7,6 +7,7 @@ namespace J87NL\Cms\Actions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use J87NL\Cms\Media\ImageCleaner;
 use J87NL\Cms\Models\MediaAsset;
 
@@ -21,6 +22,8 @@ class UploadMedia
      */
     public function handle(UploadedFile $file, array $attributes): MediaAsset
     {
+        $this->assertSize($file);
+
         $cleaned = $this->cleaner->clean((string) $file->getRealPath(), (string) $file->getMimeType());
 
         try {
@@ -47,6 +50,21 @@ class UploadMedia
         } finally {
             $this->cleaner->remove($cleaned['path']);
         }
+    }
+
+    private function assertSize(UploadedFile $file): void
+    {
+        $maxKilobytes = (int) config('cms.media.max_upload_kilobytes', 10240);
+
+        if ($maxKilobytes <= 0 || (int) $file->getSize() <= $maxKilobytes * 1024) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'file' => __('cms::validation.media_too_large', [
+                'max' => $maxKilobytes,
+            ]),
+        ]);
     }
 
     private function fileName(UploadedFile $file): string

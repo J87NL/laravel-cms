@@ -4,6 +4,26 @@ All notable changes to this package are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- `UpdateMedia` changes the alt text, caption and focal point of an asset with the new `MediaRules`.
+- `ReorderMenuItems` and `DeleteMenuItem`, so the admin and apps reorder and delete menu items through actions.
+- `cms.schema_types` lists the schema.org types a page may have. `PageRules` has a `schema_type` rule that only accepts these, and `page_draft_create` and `page_update` take `schema_type`.
+- `cms.contact.sent_query` names the query parameter of the address after a sent contact form. The default stays `verzonden`.
+- `ContactFormGuard::verdict()` and the `ContactFormVerdict` enum.
+- `ext-gd` is a declared requirement.
+
+### Changed
+
+- `UploadMedia` refuses a file larger than `cms.media.max_upload_kilobytes` with a `ValidationException` on `file`.
+- A contact form with a genuine but expired token shows "please try again" with a fresh token instead of pretending it was sent. A token that is too new still counts as a bot.
+- `AbstractBlockType::label()` returns the translated label instead of the translation key, and the MCP block type summary shows it.
+- `PageRules` allows a `canonical_url` of at most 255 characters, the size of its column.
+- Only the media library items of a `MediaAsset` flush the page cache; media of other models no longer does.
+- A transaction flushes the page cache once, however many content models it saves.
+- A block reorder that keeps the current order changes nothing and records no revision.
+- The `media_list` and `redirects_list` searches qualify their columns with the table name.
+
 ## [0.2.1]
 
 ### Added
