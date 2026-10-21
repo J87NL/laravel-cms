@@ -46,7 +46,7 @@ Cached public pages are only invalidated by content changes. Run `php artisan cm
 ## What it does
 
 - **Pages:** a tree with draft, published and unpublished states, one public home page, revisions with restore, and planned publishing (`cms:publish-scheduled` runs every minute through the scheduler).
-- **Blocks:** rich text (HugeRTE, sanitized on save and on render), text with image, image, gallery, call to action, embed (YouTube no-cookie and OpenStreetMap only), dates (emitting schema.org `Event`) and a contact form.
+- **Blocks:** rich text (HugeRTE, sanitized on save and on render), text with image, image, gallery, call to action, embed (YouTube no-cookie and OpenStreetMap only), dates (emitting schema.org `Event`), a contact form, and link tiles (sponsors or social profiles, with a configurable `rel`).
 - **Redirects:** a 301 for every path change, for the page and its subtree, with chains collapsed to one hop; manual redirects and CSV import.
 - **Findability:** title pattern, meta description with a fallback to the first text block, canonical URL, Open Graph and Twitter tags, JSON-LD (`Person` or `Organization`, `WebSite`, the page, `BreadcrumbList`, `Event`), `sitemap.xml`, `robots.txt` and `llms.txt`.
 - **Preview:** a signed link, valid for an hour, that renders a draft with `noindex`.

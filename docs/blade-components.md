@@ -29,10 +29,11 @@ See [Menus](menus.md).
 | `sizes` | `string` | `'100vw'` | The `sizes` attribute, written when there is a `srcset` |
 | `lazy` | `bool` | `true` | `loading="lazy"`, or `eager` when `false` |
 | `cover` | `bool` | `false` | Add the focal point as inline `object-position` style |
+| `alt` | `?string` | `null` | Alt text to use instead of the asset's own, for example the name of what the image stands for |
 
 Renders an `img` with the largest WebP conversion as `src`, a `srcset` of all conversions (when there are at least
 two). While no conversion exists yet, it falls back to the original file without a `srcset`. It also writes the
-original `width` and `height`, the asset's alt text and `decoding="async"`. Other attributes, such as `class`, are
+original `width` and `height`, the alt text (the `alt` attribute, or else the asset's) and `decoding="async"`. Other attributes, such as `class`, are
 passed on to the `img`. Renders nothing when the asset has no file.
 
 The inline `object-position` style is why the Content-Security-Policy allows `style-src-attr 'unsafe-inline'`. With

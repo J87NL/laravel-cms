@@ -15,6 +15,7 @@ class Image extends Component
         public string $sizes = '100vw',
         public bool $lazy = true,
         public bool $cover = false,
+        public ?string $alt = null,
     ) {}
 
     public function render(): View

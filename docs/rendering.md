@@ -75,12 +75,13 @@ domain. Load assets from your own domain, or extend the policy with `cms.securit
 | `cms::not-found` | The not-found page, with `noindex` |
 | `cms::layouts.default` | The default layout |
 | `cms::blocks.{name}` | One view per built-in block type |
+| `cms::blocks.partials.link-tile` | The content of one link tile: its image or its name |
 | `cms::components.*` | The views of the Blade components |
 | `cms::menu.items` | A menu level, included recursively |
 | `cms::mail.contact-form` | The plain text contact form mail |
 
-The block views use BEM-style classes such as `cms-block`, `cms-block--rich-text`, `cms-prose`, `cms-gallery` and
-`cms-cta__button`. The package ships no CSS: style these classes in your site stylesheet.
+The block views use BEM-style classes such as `cms-block`, `cms-block--rich-text`, `cms-prose`, `cms-gallery`,
+`cms-link-tiles__tile` and `cms-cta__button`. The package ships no CSS: style these classes in your site stylesheet.
 
 ### Customizing views
 
@@ -103,7 +104,7 @@ All public texts use the `cms` translation namespace. The package ships English 
 | `menus.php` | Admin labels of the menu keys |
 | `pages.php` | Page status labels |
 | `permissions.php` | Permission labels |
-| `public.php` | Menu `aria-label`s, the not-found page and the `llms.txt` heading |
+| `public.php` | Menu `aria-label`s, the link tiles label, the not-found page and the `llms.txt` heading |
 | `redirects.php` | Redirect source labels and CSV import errors |
 | `settings.php` | Entity type labels |
 | `validation.php` | Validation messages of the actions |

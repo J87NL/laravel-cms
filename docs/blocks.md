@@ -19,6 +19,7 @@ registered types, see [Blocks](https://github.com/J87NL/laravel-vue-cms/blob/mai
 | `embed` | `EmbedBlock` | A YouTube (no-cookie) video or an OpenStreetMap map |
 | `dates` | `DatesBlock` | A list of dates, emitted as schema.org `Event` |
 | `contact_form` | `ContactFormBlock` | A contact form that mails the site owner |
+| `link_tiles` | `LinkTilesBlock` | A grid of tiles linking to other sites, such as sponsors or social profiles |
 
 All classes live in `J87NL\Cms\Blocks\Types`. The fields below are the keys of the block `data`. Required fields are
 marked.
@@ -93,6 +94,30 @@ Only URLs of the providers in `cms.embeds` pass the `J87NL\Cms\Rules\AllowedEmbe
 
 Items are sorted by date. When a location name or address is set, every item is added to the page's JSON-LD as a
 schema.org `Event` with that location. Without a location, no events are emitted.
+
+### link_tiles
+
+| Field | Rules |
+|---|---|
+| `title` | string, at most 160 characters |
+| `rel` | `noopener` (default), `me noopener` or `sponsored noopener` |
+| `tiles` (required) | list of 1 to 100 tiles, reorderable |
+| `tiles.*.name` (required) | string, at most 160 characters |
+| `tiles.*.media_id` | id of a media asset |
+| `tiles.*.url` | optional; an `https://` URL (lowercase scheme) that is also a safe link, at most 2,048 characters |
+
+A tile shows its image, or its name when it has no image (or the image is missing or has no renditions). The image's alt
+text is the tile name, so the tile keeps its name for screen readers with or without a link. A tile with a URL is a link
+that opens in a new tab, with the block's `rel` value and the accessible name ":name (opens in a new tab)"; a tile
+without a URL is not a link. The URL is optional whatever the `rel` value, so a social profiles block can have a tile
+without a link too. The block is a `section` labelled by its heading, or with the visitor text
+`cms::public.link_tiles.label` ("Links") when it has none.
+
+Images render with `sizes="12rem"`. For smaller icons, publish and override the partial
+`cms::blocks.partials.link-tile` with a matching `sizes` value. Choose `me noopener` for your own profiles (verification on Mastodon and similar sites) and
+`sponsored noopener` for sponsors and other paid links. The URL is checked again on render, and a stored `rel` value
+outside the three above renders as `noopener`. The block reports its images through `ReferencesMedia`, so an image used
+on a tile cannot be deleted.
 
 ### contact_form
 

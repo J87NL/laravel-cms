@@ -4,6 +4,11 @@ All notable changes to this package are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- The `link_tiles` block type (`LinkTilesBlock`): an optional heading and a reorderable list of tiles with a name, an optional image and an optional `https://` link, rendered as image or name. The `rel` value is chosen per block: `noopener`, `me noopener` or `sponsored noopener`. Images on tiles count as in use. It replaces app blocks such as sponsors and social links.
+- `<x-cms::image>` takes an optional `alt` attribute that replaces the asset's alt text.
+
 ## [0.2.2] - 2026-10-21
 
 ### Added

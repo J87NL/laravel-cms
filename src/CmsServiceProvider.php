@@ -16,6 +16,7 @@ use J87NL\Cms\Blocks\Types\DatesBlock;
 use J87NL\Cms\Blocks\Types\EmbedBlock;
 use J87NL\Cms\Blocks\Types\GalleryBlock;
 use J87NL\Cms\Blocks\Types\ImageBlock;
+use J87NL\Cms\Blocks\Types\LinkTilesBlock;
 use J87NL\Cms\Blocks\Types\RichTextBlock;
 use J87NL\Cms\Blocks\Types\TextWithImageBlock;
 use J87NL\Cms\Cache\FlushPageCache;
@@ -48,6 +49,7 @@ class CmsServiceProvider extends ServiceProvider
         EmbedBlock::class,
         DatesBlock::class,
         ContactFormBlock::class,
+        LinkTilesBlock::class,
     ];
 
     /**
