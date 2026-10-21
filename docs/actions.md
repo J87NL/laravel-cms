@@ -75,10 +75,13 @@ the number of revisions kept per page (`cms.revisions.keep`, at least 1). See [R
 |---|---|
 | `UploadMedia` | `handle(UploadedFile $file, array $attributes): MediaAsset` |
 | `UpdateMedia` | `handle(MediaAsset $asset, array $attributes): MediaAsset` |
+| `ReplaceMediaFile` | `handle(MediaAsset $asset, UploadedFile $file): MediaAsset` |
 | `DeleteMedia` | `handle(MediaAsset $asset): void` |
 
 `UploadMedia` refuses a file larger than `cms.media.max_upload_kilobytes`. `UpdateMedia` changes the alt text, caption
-and focal point and validates them with `MediaRules`. See [Media](media.md).
+and focal point and validates them with `MediaRules`. `ReplaceMediaFile` gives an asset a new file with the same checks
+as `UploadMedia`, keeps its id and details, and deletes the old files after the transaction commits. See
+[Media](media.md).
 
 ## Menus
 

@@ -59,6 +59,30 @@ original is smaller.
 
 Because the conversions are queued, run a queue worker. Until the conversions exist, the original file is used.
 
+## Replacing the file
+
+```php
+use J87NL\Cms\Actions\ReplaceMediaFile;
+
+$asset = app(ReplaceMediaFile::class)->handle($asset, $request->file('file'));
+```
+
+`ReplaceMediaFile::handle(MediaAsset $asset, UploadedFile $file): MediaAsset` gives an asset a new file while it keeps
+its id, alt text, caption and focal point. Blocks, pages and settings refer to the asset by id, so they show the new
+file without being relinked.
+
+The new file goes through the same checks as an upload: the size limit `cms.media.max_upload_kilobytes`, a failed
+upload, and `ImageCleaner` with the same refusals and metadata stripping. A refusal is a `ValidationException` on
+`file`, and the current file stays in place.
+
+In one transaction, the action locks the asset, moves its current media item out of the `file` collection, stores the
+new file in it and touches the asset. The media library then creates new conversions for every width in
+`cms.media.widths`, under new URLs, so browsers and proxies never keep showing the old image. The old original and its
+conversions are deleted only after the transaction commits; when it rolls back, the old file stays and the files of the
+new one are removed. Saving the new media item flushes the [page cache](page-cache.md).
+
+There is no MCP tool to upload or replace a file: files are only added and replaced in the admin.
+
 ## Using an asset
 
 | Method | Returns |

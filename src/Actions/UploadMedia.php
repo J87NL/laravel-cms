@@ -8,8 +8,8 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\ValidationException;
 use J87NL\Cms\Media\ImageCleaner;
+use J87NL\Cms\Media\UploadedImage;
 use J87NL\Cms\Models\MediaAsset;
 use J87NL\Cms\Validation\MediaRules;
 
@@ -17,6 +17,7 @@ class UploadMedia
 {
     public function __construct(
         private readonly ImageCleaner $cleaner,
+        private readonly UploadedImage $upload,
     ) {}
 
     /**
@@ -24,7 +25,7 @@ class UploadMedia
      */
     public function handle(UploadedFile $file, array $attributes): MediaAsset
     {
-        $this->assertSize($file);
+        $this->upload->assertUsable($file);
 
         $attributes = $this->validated($attributes);
 
@@ -36,8 +37,8 @@ class UploadMedia
                     ->create($attributes);
 
                 $asset->addMedia($cleaned['path'])
-                    ->usingFileName($this->fileName($file))
-                    ->usingName(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME))
+                    ->usingFileName($this->upload->fileName($file))
+                    ->usingName($this->upload->name($file))
                     ->withCustomProperties([
                         'width' => $cleaned['width'],
                         'height' => $cleaned['height'],
@@ -49,27 +50,6 @@ class UploadMedia
         } finally {
             $this->cleaner->remove($cleaned['path']);
         }
-    }
-
-    private function assertSize(UploadedFile $file): void
-    {
-        if (! $file->isValid()) {
-            throw ValidationException::withMessages([
-                'file' => __('cms::validation.image_unreadable'),
-            ]);
-        }
-
-        $maxKilobytes = (int) config('cms.media.max_upload_kilobytes', 10240);
-
-        if ($maxKilobytes <= 0 || (int) $file->getSize() <= $maxKilobytes * 1024) {
-            return;
-        }
-
-        throw ValidationException::withMessages([
-            'file' => __('cms::validation.media_too_large', [
-                'max' => $maxKilobytes,
-            ]),
-        ]);
     }
 
     /**
@@ -89,13 +69,5 @@ class UploadMedia
         }
 
         return Validator::make(Arr::only($attributes, array_keys($rules)), $rules)->validate();
-    }
-
-    private function fileName(UploadedFile $file): string
-    {
-        $name = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
-        $slug = str($name)->slug()->toString();
-
-        return sprintf('%s.%s', $slug === '' ? 'image' : $slug, $file->guessExtension() ?? 'jpg');
     }
 }
