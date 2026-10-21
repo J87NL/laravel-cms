@@ -279,14 +279,51 @@ class PendingRevisionEditor
         usort($blocks, fn (array $a, array $b): int => (int) ($a['sort_order'] ?? 0) <=> (int) ($b['sort_order'] ?? 0));
 
         return [
-            'page' => array_map(fn (mixed $value): string => (string) json_encode($value), Arr::only($content['page'], Page::CONTENT_ATTRIBUTES)),
-            'blocks' => array_map(fn (array $block): string => (string) json_encode([
-                (int) ($block['id'] ?? 0),
-                $block['type'] ?? null,
-                $block['data'] ?? null,
-                (bool) ($block['is_visible'] ?? true),
-            ]), $blocks),
+            'page' => self::normalizedPage($content['page']),
+            'blocks' => array_map(fn (array $block): string => sprintf('%d:%s', (int) ($block['id'] ?? 0), self::blockKey($block)), $blocks),
         ];
+    }
+
+    public static function sameValue(string $field, mixed $first, mixed $second): bool
+    {
+        return self::normalizedPage([$field => $first]) === self::normalizedPage([$field => $second]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $block
+     */
+    public static function blockKey(array $block): string
+    {
+        return (string) json_encode([
+            $block['type'] ?? null,
+            self::sortedKeys($block['data'] ?? null),
+            (bool) ($block['is_visible'] ?? true),
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private static function normalizedPage(array $attributes): array
+    {
+        $page = new Page;
+        $page->forceFill(Arr::only($attributes, Page::CONTENT_ATTRIBUTES));
+
+        return Arr::only($page->attributesToArray(), Page::CONTENT_ATTRIBUTES);
+    }
+
+    private static function sortedKeys(mixed $value): mixed
+    {
+        if (! is_array($value)) {
+            return $value;
+        }
+
+        if (! array_is_list($value)) {
+            ksort($value);
+        }
+
+        return array_map(fn (mixed $item): mixed => self::sortedKeys($item), $value);
     }
 
     /**

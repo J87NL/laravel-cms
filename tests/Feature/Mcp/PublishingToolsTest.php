@@ -707,3 +707,115 @@ it('counts an image once when the live page and its pending revision both use it
     expect(app(MediaUsage::class)->count($asset))->toBe(1)
         ->and(app(MediaUsage::class)->count($shareImage))->toBe(1);
 });
+
+it('keeps a live reorder when the pending revision only adds a block', function (): void {
+    makePage(['title' => 'Home', 'slug' => 'home'], home: true);
+    $page = makePage(['title' => 'Live', 'slug' => 'live']);
+    $first = addBlock($page, 'rich_text', ['html' => '<p>1</p>']);
+    $second = addBlock($page, 'rich_text', ['html' => '<p>2</p>']);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(BlockAddTool::class, ['page_id' => $page->id, 'type' => 'rich_text', 'data' => ['html' => '<p>nieuw</p>']])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(BlocksReorderLiveTool::class, ['page_id' => $page->id, 'block_ids' => [$second->id, $first->id]])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(PagePublishTool::class, ['page_id' => $page->id])
+        ->assertOk();
+
+    expect(array_map(fn (array $block): mixed => $block[1], liveBlockSummary($page)))->toBe([
+        '<p>2</p>',
+        '<p>1</p>',
+        '<p>nieuw</p>',
+    ]);
+});
+
+it('places a new pending block after the block it follows in the pending revision', function (): void {
+    makePage(['title' => 'Home', 'slug' => 'home'], home: true);
+    $page = makePage(['title' => 'Live', 'slug' => 'live']);
+    $first = addBlock($page, 'rich_text', ['html' => '<p>1</p>']);
+    $second = addBlock($page, 'rich_text', ['html' => '<p>2</p>']);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(BlockAddTool::class, ['page_id' => $page->id, 'type' => 'rich_text', 'data' => ['html' => '<p>nieuw</p>']])
+        ->assertOk();
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(BlocksReorderTool::class, ['page_id' => $page->id, 'block_ids' => [$first->id, -1, $second->id]])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(PagePublishTool::class, ['page_id' => $page->id])
+        ->assertOk();
+
+    expect(array_map(fn (array $block): mixed => $block[1], liveBlockSummary($page)))->toBe([
+        '<p>1</p>',
+        '<p>nieuw</p>',
+        '<p>2</p>',
+    ]);
+});
+
+it('lets the pending revision win for a block that one side changed and the other removed', function (): void {
+    makePage(['title' => 'Home', 'slug' => 'home'], home: true);
+    $page = makePage(['title' => 'Live', 'slug' => 'live']);
+    $removedInDraft = addBlock($page, 'rich_text', ['html' => '<p>weg in voorstel</p>']);
+    $removedLive = addBlock($page, 'rich_text', ['html' => '<p>weg live</p>']);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(BlockRemoveTool::class, ['block_id' => $removedInDraft->id])
+        ->assertOk();
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(BlockUpdateTool::class, ['block_id' => $removedLive->id, 'data' => ['html' => '<p>aangepast in voorstel</p>']])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(BlockUpdateLiveTool::class, ['block_id' => $removedInDraft->id, 'data' => ['html' => '<p>aangepast live</p>']])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(BlockRemoveLiveTool::class, ['block_id' => $removedLive->id])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(PagePublishTool::class, ['page_id' => $page->id])
+        ->assertOk();
+
+    expect(array_map(fn (array $block): mixed => $block[1], liveBlockSummary($page)))->toBe([
+        '<p>aangepast in voorstel</p>',
+    ]);
+});
+
+it('takes a page offline even when its pending revision asks for an address that is taken', function (): void {
+    makePage(['title' => 'Home', 'slug' => 'home'], home: true);
+    $page = makePage(['title' => 'Live', 'slug' => 'live']);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'slug' => 'bezet', 'title' => 'Voorstel'])
+        ->assertOk();
+
+    makePage(['title' => 'Bezet', 'slug' => 'bezet']);
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(PageUnpublishTool::class, ['page_id' => $page->id])
+        ->assertOk();
+
+    expect($page->refresh()->status)->toBe(PageStatus::Unpublished)
+        ->and($page->slug)->toBe('live')
+        ->and($page->title)->toBe('Voorstel')
+        ->and($page->pendingRevision()->exists())->toBeFalse();
+});
+
+it('treats equal values of another type as no change', function (): void {
+    $asset = uploadImage();
+    $page = makePage(['title' => 'Live', 'noindex' => true, 'og_image_id' => $asset->id]);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'noindex' => 1, 'og_image_id' => (string) $asset->id])
+        ->assertOk();
+
+    expect($page->pendingRevision()->exists())->toBeFalse();
+});

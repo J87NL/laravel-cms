@@ -9,7 +9,7 @@ All notable changes to this package are documented here. The format follows [Kee
 - Pending revisions: a published page can hold one pending revision (`cms_revisions.is_pending`) with changes that are not live yet. `Page::pendingRevision()`, the `Revision` scopes `history()` and `pending()`, and `J87NL\Cms\Pages\PendingRevisionEditor` to change it.
 - `PublishPage` applies what the pending revision of a page changed compared with the live page it started from (`PendingRevisionApplier`, blocks matched by id), and publishes a page that is not published yet. `DiscardPendingRevision` throws a pending revision away.
 - `ChangePageStatus::applyLocked()` changes the status of a page whose row the caller already locked.
-- Taking a page offline applies its pending revision to the page.
+- Taking a page offline applies its pending revision to the page; a slug or parent change that cannot be applied is skipped with a logged warning, so it never blocks the status change.
 - MCP tools `page_update_live`, `block_add_live`, `block_update_live`, `block_remove_live` and `blocks_reorder_live` change a page directly, also when it is published. They need `cms.pages.publish` and are marked destructive.
 - MCP tools `page_publish`, `page_unpublish` and `revision_discard`, marked destructive. They need `cms.pages.edit` and `cms.pages.publish` and check the `cms.pages.write` gate.
 - `pages_list` and `page_get` report `has_pending_revision`; `page_get` returns `pending_revision`.

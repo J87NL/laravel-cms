@@ -102,13 +102,17 @@ pending revision again, so `pending_revision` is `null` in that response.
 - `page_publish` applies only what the pending revision changed compared with its base, in one transaction: changed
   page fields and blocks are written (a block keeps its id), new blocks are created and removed blocks are deleted.
   Fields and blocks the pending revision left alone keep their live value, so changes made directly on the live page in
-  the meantime (by the live tools or the admin) stay, unless the pending revision changed the same field or block. When
-  the pending revision changed the block order, its blocks come first in that order, followed by blocks added live in
-  the meantime. The pending revision is removed, a normal revision is recorded and the page cache is flushed. The live
+  the meantime (by the live tools or the admin) stay, unless the pending revision changed the same field or block: then
+  the pending revision wins (a block it changed but that was removed live comes back, a block it removed is removed even
+  when it changed live). When the pending revision changed the order of the blocks it shares with its base, its blocks
+  come first in that order, followed by blocks added live in the meantime. Otherwise the live order stays, and a block
+  added in the pending revision goes in front of the block that follows it there, or at the end.
+  The pending revision is removed, a normal revision is recorded and the page cache is flushed. The live
   tools say in their answer when the page has a pending revision.
 - Taking a page offline (`page_unpublish`, the admin or a planned unpublish) applies its pending revision to the page in
   the same way, so a pending revision only exists on a published page and edits to an offline page go to the page
-  directly.
+  directly. A pending revision never blocks taking a page offline: when its new slug or parent cannot be applied (for
+  example because the address is taken), the rest is applied, the address stays as it was and a warning is logged.
 - `pending_revision.created_by` is the user who started it and `pending_revision.edited_by` the user of the last change.
 - `revision_discard` deletes the pending revision; the live page stays as it is.
 - Images used in a pending revision count as in use, so they cannot be deleted before it is published or discarded.

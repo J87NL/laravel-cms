@@ -6,6 +6,7 @@ namespace J87NL\Cms\Pages;
 
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Arr;
 use J87NL\Cms\Actions\RecordRevision;
 use J87NL\Cms\Actions\RestoreRevision;
 use J87NL\Cms\Actions\SavePage;
@@ -21,12 +22,16 @@ class PendingRevisionApplier
         private readonly RecordRevision $recordRevision,
     ) {}
 
-    public function apply(Page $page, Revision $revision): void
+    public function apply(Page $page, Revision $revision, bool $withPath = true): void
     {
         $content = PendingRevisionEditor::content($revision->snapshot);
         $base = PendingRevisionEditor::base($revision->snapshot) ?? $this->recordRevision->snapshot($page);
+        $pendingPage = $withPath ? $content['page'] : Arr::except($content['page'], [
+            'slug',
+            'parent_id',
+        ]);
 
-        $this->applyPage($page, $content['page'], $base['page']);
+        $this->applyPage($page, $pendingPage, $base['page']);
         $this->applyBlocks($page, $content['blocks'], $base['blocks']);
 
         $revision->delete();
@@ -45,7 +50,7 @@ class PendingRevisionApplier
                 continue;
             }
 
-            if (json_encode($pending[$field]) === json_encode($base[$field] ?? null)) {
+            if (PendingRevisionEditor::sameValue($field, $pending[$field], $base[$field] ?? null)) {
                 continue;
             }
 
@@ -85,6 +90,7 @@ class PendingRevisionApplier
         }
 
         $pendingIds = [];
+        $createdIds = [];
 
         foreach ($this->sorted($pending) as $block) {
             $id = (int) ($block['id'] ?? 0);
@@ -107,7 +113,9 @@ class PendingRevisionApplier
                 'is_visible' => (bool) ($block['is_visible'] ?? true),
             ]);
 
-            if (! $saved->exists) {
+            $created = ! $saved->exists;
+
+            if ($created) {
                 $saved->page()->associate($page);
                 $saved->sort_order = (int) ($block['sort_order'] ?? 0);
             }
@@ -116,13 +124,68 @@ class PendingRevisionApplier
 
             $live->put($saved->id, $saved);
             $pendingIds[] = $saved->id;
+
+            if ($created) {
+                $createdIds[] = $saved->id;
+            }
         }
 
-        if ($this->order($pending) === $this->order($base)) {
+        if ($this->sharedOrder($pending, $base) !== $this->sharedOrder($base, $pending)) {
+            $this->reorder($live, $pendingIds);
+
             return;
         }
 
-        $this->reorder($live, $pendingIds);
+        if ($createdIds === []) {
+            return;
+        }
+
+        $this->place($live, $pendingIds, $createdIds);
+    }
+
+    /**
+     * @param  Collection<int, Block>  $live
+     * @param  list<int>  $pendingIds
+     * @param  list<int>  $createdIds
+     */
+    private function place(Collection $live, array $pendingIds, array $createdIds): void
+    {
+        $order = array_values(array_map('intval', $live
+            ->reject(fn (Block $block): bool => in_array($block->id, $createdIds, true))
+            ->sortBy([
+                [
+                    'sort_order',
+                    'asc',
+                ],
+                [
+                    'id',
+                    'asc',
+                ],
+            ])
+            ->keys()
+            ->all()));
+
+        foreach ($pendingIds as $index => $id) {
+            if (! in_array($id, $createdIds, true)) {
+                continue;
+            }
+
+            $position = count($order);
+
+            foreach (array_slice($pendingIds, $index + 1) as $nextId) {
+                $found = array_search($nextId, $order, true);
+
+                if ($found !== false) {
+                    $position = $found;
+
+                    break;
+                }
+            }
+
+            array_splice($order, $position, 0, [$id]);
+        }
+
+        $this->reorder($live, $order);
     }
 
     /**
@@ -154,15 +217,7 @@ class PendingRevisionApplier
      */
     private function differs(array $pending, array $base): bool
     {
-        return json_encode([
-            $pending['type'] ?? null,
-            $pending['data'] ?? null,
-            (bool) ($pending['is_visible'] ?? true),
-        ]) !== json_encode([
-            $base['type'] ?? null,
-            $base['data'] ?? null,
-            (bool) ($base['is_visible'] ?? true),
-        ]);
+        return PendingRevisionEditor::blockKey($pending) !== PendingRevisionEditor::blockKey($base);
     }
 
     /**
@@ -193,10 +248,16 @@ class PendingRevisionApplier
 
     /**
      * @param  list<array<string, mixed>>  $blocks
+     * @param  list<array<string, mixed>>  $others
      * @return list<int>
      */
-    private function order(array $blocks): array
+    private function sharedOrder(array $blocks, array $others): array
     {
-        return array_map(fn (array $block): int => (int) ($block['id'] ?? 0), $this->sorted($blocks));
+        $otherIds = array_keys($this->byId($others));
+
+        return array_values(array_filter(
+            array_map(fn (array $block): int => (int) ($block['id'] ?? 0), $this->sorted($blocks)),
+            fn (int $id): bool => in_array($id, $otherIds, true),
+        ));
     }
 }
