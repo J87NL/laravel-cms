@@ -46,7 +46,11 @@ Extend `J87NL\Cms\Blocks\AbstractBlockType` to get defaults for four of the meth
 
 | Method | Default |
 |---|---|
-| `label()` | The string `cms::blocks.{key}.label`, a translation key. The package does not translate it; return a translated string yourself, or let the code that shows the label pass it through `__()` |
+| `label()` | The translation of `cms::blocks.{key}.label` in the current locale |
+
+`label()` should return translated text. Override it with `__('your.key')`, not with the bare key: the MCP block type
+summary and the admin still pass a returned key through `__()`, so an old type that returns a key keeps working, but
+other code that shows the label gets the key.
 | `rules()` | The rules of `fields()`, collected with `FormConfig::make($this->fields())->getRules()` |
 | `prepare()` | The data unchanged |
 | `viewData()` | `['data' => $data]` |
@@ -234,7 +238,7 @@ print it with `{!! !!}`.
 
 ## Translating the built-in labels
 
-The built-in types return translation keys from `label()`, such as `cms::blocks.rich_text.label`, untranslated: the
-code that shows the label must pass it through `__()`. The package ships
+The built-in types return the translation of `cms::blocks.{key}.label` from `label()`, such as "Text" for
+`rich_text`. The admin and the block type summary of the MCP tools show that label. The package ships
 English and Dutch strings in `lang/en/blocks.php` and `lang/nl/blocks.php`. Override them in
 `lang/vendor/cms/{locale}/blocks.php` of your app.

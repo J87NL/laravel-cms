@@ -17,10 +17,17 @@ class BlockTypeSummary
 
     public function text(): string
     {
-        return $this->summary ??= sprintf('Block types and their data fields (* = required): %s.', implode('; ', array_map(
-            fn (BlockType $type): string => sprintf('%s (%s)', $type->key(), implode(', ', $this->fieldNames($type))),
+        return $this->summary ??= sprintf('Block types with their label and data fields (* = required): %s.', implode('; ', array_map(
+            fn (BlockType $type): string => sprintf('%s "%s" (%s)', $type->key(), $this->label($type), implode(', ', $this->fieldNames($type))),
             $this->registry->all(),
         )));
+    }
+
+    private function label(BlockType $type): string
+    {
+        $label = __($type->label());
+
+        return is_string($label) ? $label : $type->label();
     }
 
     /**

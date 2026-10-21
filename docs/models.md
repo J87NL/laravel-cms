@@ -15,8 +15,8 @@ automatically.
 | `SiteSettings` | `cms_settings` | The site settings row, see [Site settings](site-settings.md) |
 
 Writing to these models directly skips the rules of the [actions](actions.md), such as path checks, sanitizing and
-revisions. Saving or deleting a `Page`, `Block`, `Menu`, `MenuItem`, `SiteSettings`, `MediaAsset` or media library
-`Spatie\MediaLibrary\MediaCollections\Models\Media` item still flushes the [page cache](page-cache.md), and a path change of a `Page` still creates [redirects](redirects.md).
+revisions. Saving or deleting a `Page`, `Block`, `Menu`, `MenuItem`, `SiteSettings`, `MediaAsset` or the media library
+`Spatie\MediaLibrary\MediaCollections\Models\Media` item of a `MediaAsset` still flushes the [page cache](page-cache.md), and a path change of a `Page` still creates [redirects](redirects.md).
 
 ## Page
 

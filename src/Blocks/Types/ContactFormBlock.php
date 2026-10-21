@@ -92,7 +92,7 @@ class ContactFormBlock extends AbstractBlockType
             'successMessage' => $this->string($data, 'success_message') ?: __('cms::blocks.contact_form.default_success'),
             'anchor' => sprintf('contact-%d', $blockId),
             'action' => route('cms.contact', ['block' => $blockId]),
-            'token' => $this->guard->token($blockId),
+            'token' => $this->guard->token($blockId, ! is_null($state)),
             'sent' => ContactFormState::sent($request, $blockId),
             'errors' => $state->errors ?? new MessageBag,
             'old' => $state->old ?? [],

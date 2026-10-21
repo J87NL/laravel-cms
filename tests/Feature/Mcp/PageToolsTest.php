@@ -132,6 +132,37 @@ it('updates only the passed fields of a draft or unpublished page', function (Pa
     'unpublished' => [PageStatus::Unpublished],
 ]);
 
+it('accepts only a supported schema type', function (): void {
+    $page = makePage(['title' => 'Over ons'], PageStatus::Draft);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'schema_type' => 'Person'])
+        ->assertHasErrors(['schema type']);
+
+    expect($page->refresh()->schema_type)->toBeNull();
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'schema_type' => 'AboutPage'])
+        ->assertOk();
+
+    expect($page->refresh()->schema_type)->toBe('AboutPage');
+});
+
+it('refuses a canonical url longer than its column', function (): void {
+    $page = makePage(['title' => 'Lang'], PageStatus::Draft);
+    $url = sprintf('https://example.org/%s', str_repeat('a', 235));
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'canonical_url' => sprintf('%sa', $url)])
+        ->assertHasErrors(['canonical url']);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'canonical_url' => $url])
+        ->assertOk();
+
+    expect($page->refresh()->canonical_url)->toBe($url);
+});
+
 it('refuses to update a published page, also for a publisher', function (): void {
     $page = makePage(['title' => 'Live']);
 

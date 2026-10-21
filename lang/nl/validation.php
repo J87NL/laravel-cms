@@ -32,4 +32,5 @@ return [
     'menu_item_has_children' => 'Onder dit item staan andere items, dus het kan niet zelf onder een item staan.',
     'block_order_incomplete' => 'Noem elk blok van de pagina precies één keer.',
     'menu_label_required' => 'Vul een label in voor een link naar een adres.',
+    'media_too_large' => 'Dit bestand is groter dan :max kB. Upload een kleinere afbeelding.',
 ];

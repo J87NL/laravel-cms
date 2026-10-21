@@ -23,9 +23,20 @@ class PageRules
             'meta_title' => ['nullable', 'string', 'max:160'],
             'meta_description' => ['nullable', 'string', 'max:320'],
             'og_image_id' => ['nullable', 'integer', MediaOptions::existsRule()],
-            'canonical_url' => ['nullable', 'url:https,http', 'max:2048'],
+            'canonical_url' => ['nullable', 'url:https,http', 'max:255'],
             'noindex' => ['boolean'],
+            'schema_type' => ['nullable', 'string', Rule::in(self::schemaTypes())],
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function schemaTypes(): array
+    {
+        $types = config('cms.schema_types', []);
+
+        return is_array($types) ? array_values(array_map('strval', $types)) : [];
     }
 
     /**

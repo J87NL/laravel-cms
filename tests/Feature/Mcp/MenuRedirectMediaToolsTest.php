@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\Fluent\AssertableJson;
 use J87NL\Cms\CmsPermission;
 use J87NL\Cms\Enums\PageStatus;
@@ -307,3 +309,21 @@ it('treats LIKE wildcards in a search as plain text', function (): void {
             ->where('total', 0)
             ->etc());
 });
+
+it('qualifies the columns it searches on with their table', function (string $tool, string $permission, array $arguments, string $column): void {
+    $queries = [];
+
+    DB::listen(function (QueryExecuted $query) use (&$queries): void {
+        $queries[] = $query->sql;
+    });
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::from($permission)))
+        ->tool($tool, $arguments)
+        ->assertOk();
+
+    expect(implode("\n", $queries))->toContain($column);
+})->with([
+    'media alt' => [MediaListTool::class, 'cms.media', ['search' => 'foto'], '"cms_media_assets"."alt" like'],
+    'media caption' => [MediaListTool::class, 'cms.media', ['search' => 'foto'], '"cms_media_assets"."caption" like'],
+    'redirect from path' => [RedirectsListTool::class, 'cms.redirects', ['from' => 'oud'], '"cms_redirects"."from_path" like'],
+]);

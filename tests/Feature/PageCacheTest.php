@@ -2,13 +2,20 @@
 
 declare(strict_types=1);
 
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use J87NL\Cms\Actions\ChangePageStatus;
+use J87NL\Cms\Actions\ReorderBlocks;
 use J87NL\Cms\Actions\SaveSiteSettings;
 use J87NL\Cms\Cache\PageCache;
 use J87NL\Cms\Enums\PageStatus;
 use J87NL\Cms\Http\Middleware\CachePublicResponses;
+use J87NL\Cms\Models\MediaAsset;
 use J87NL\Cms\Models\Menu;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Symfony\Component\HttpFoundation\Response;
 
 beforeEach(function (): void {
@@ -111,4 +118,133 @@ test('the flush command drops cached pages so a changed view is served', functio
     $this->artisan('cms:flush-page-cache')->assertSuccessful();
 
     $this->get('/about')->assertHeader('X-Cms-Cache', 'miss');
+});
+
+test('media of other models leaves the cache alone, CMS media flushes it', function (): void {
+    Storage::fake('public');
+
+    $cache = app(PageCache::class);
+    $version = $cache->version();
+
+    $media = new Media([
+        'model_type' => 'App\\Models\\Product',
+        'model_id' => 1,
+        'uuid' => (string) Str::uuid(),
+        'collection_name' => 'photos',
+        'name' => 'product',
+        'file_name' => 'product.jpg',
+        'mime_type' => 'image/jpeg',
+        'disk' => 'public',
+        'size' => 1,
+        'manipulations' => [],
+        'custom_properties' => [],
+        'generated_conversions' => [],
+        'responsive_images' => [],
+    ]);
+    $media->save();
+    $media->delete();
+
+    expect($cache->version())->toBe($version);
+
+    uploadImage();
+
+    expect($cache->version())->toBeGreaterThan($version);
+});
+
+test('a transaction that changes many blocks flushes the cache once', function (): void {
+    $second = addBlock($this->page, 'rich_text', ['html' => '<p>Second</p>']);
+    $third = addBlock($this->page, 'rich_text', ['html' => '<p>Third</p>']);
+
+    $cache = app(PageCache::class);
+    $version = $cache->version();
+
+    app(ReorderBlocks::class)->handle($this->page, [$third->id, $second->id, $this->block->id], null);
+
+    expect($cache->version())->toBe($version + 1);
+});
+
+test('a rolled back transaction leaves the cache alone and later changes still flush it', function (): void {
+    $cache = app(PageCache::class);
+    $version = $cache->version();
+
+    try {
+        DB::transaction(function (): void {
+            addBlock($this->page, 'rich_text', ['html' => '<p>Never</p>']);
+
+            throw new RuntimeException('Rolled back');
+        });
+    } catch (RuntimeException) {
+    }
+
+    expect($cache->version())->toBe($version);
+
+    addBlock($this->page, 'rich_text', ['html' => '<p>Kept</p>']);
+
+    expect($cache->version())->toBe($version + 1);
+});
+
+test('a later save still flushes after an earlier commit callback threw', function (): void {
+    $cache = app(PageCache::class);
+    $version = $cache->version();
+
+    try {
+        DB::transaction(function (): void {
+            DB::afterCommit(fn () => throw new RuntimeException('Other listener'));
+
+            $this->block->is_visible = false;
+            $this->block->save();
+        });
+    } catch (RuntimeException) {
+    }
+
+    addBlock($this->page, 'rich_text', ['html' => '<p>Second</p>']);
+
+    expect($cache->version())->toBeGreaterThan($version);
+});
+
+test('a rolled back savepoint keeps the flush of its outer transaction', function (bool $outerSavesFirst): void {
+    $cache = app(PageCache::class);
+    $version = $cache->version();
+
+    DB::transaction(function () use ($outerSavesFirst): void {
+        if ($outerSavesFirst) {
+            addBlock($this->page, 'rich_text', ['html' => '<p>Outer</p>']);
+        }
+
+        try {
+            DB::transaction(function (): void {
+                addBlock($this->page, 'rich_text', ['html' => '<p>Inner</p>']);
+
+                throw new RuntimeException('Inner rolled back');
+            });
+        } catch (RuntimeException) {
+        }
+
+        if (! $outerSavesFirst) {
+            addBlock($this->page, 'rich_text', ['html' => '<p>Outer</p>']);
+        }
+    });
+
+    expect($cache->version())->toBe($version + 1);
+})->with([
+    'outer saves first' => [true],
+    'outer saves after the savepoint' => [false],
+]);
+
+test('CMS media under a morph map alias still flushes the cache', function (): void {
+    Storage::fake('public');
+    Relation::morphMap([
+        'cms-media-asset' => MediaAsset::class,
+    ]);
+
+    $asset = uploadImage();
+    $cache = app(PageCache::class);
+    $version = $cache->version();
+
+    $media = $asset->file();
+    $media->name = 'renamed';
+    $media->save();
+
+    expect($media->model_type)->toBe('cms-media-asset')
+        ->and($cache->version())->toBe($version + 1);
 });

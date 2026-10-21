@@ -15,6 +15,7 @@ use J87NL\Cms\Blocks\BlockRegistry;
 use J87NL\Cms\Contact\ContactFormGuard;
 use J87NL\Cms\Contact\ContactFormLimiter;
 use J87NL\Cms\Contact\ContactFormState;
+use J87NL\Cms\Contact\ContactFormVerdict;
 use J87NL\Cms\Mail\ContactFormSubmitted;
 use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\Page;
@@ -52,10 +53,20 @@ class ContactFormController extends Controller
             return $this->tooMany($request, $page, $contactBlock, $this->limiter->retryAfterForAddress($request));
         }
 
-        if (! $this->guard->looksHuman($request, $contactBlock->id)) {
-            $this->limiter->hitAddress($request);
+        $verdict = $this->guard->verdict($request, $contactBlock->id);
 
+        if ($verdict !== ContactFormVerdict::Human) {
+            $this->limiter->hitAddress($request);
+        }
+
+        if ($verdict === ContactFormVerdict::Bot) {
             return $this->sent($page, $contactBlock);
+        }
+
+        if ($verdict === ContactFormVerdict::Expired) {
+            return $this->failed($request, $page, $contactBlock, new MessageBag([
+                'form' => __('cms::blocks.contact_form.expired'),
+            ]), 422);
         }
 
         $validator = Validator::make($request->only(['name', 'email', 'message']), [
@@ -110,7 +121,7 @@ class ContactFormController extends Controller
 
     private function sent(Page $page, Block $block): RedirectResponse
     {
-        return redirect(sprintf('%s?%s=%d#contact-%d', $page->url(), ContactFormState::SENT_QUERY, $block->id, $block->id), 303);
+        return redirect(sprintf('%s?%s=%d#contact-%d', $page->url(), rawurlencode(ContactFormState::sentQuery()), $block->id, $block->id), 303);
     }
 
     private function failed(Request $request, Page $page, Block $block, MessageBag $errors, int $status): Response

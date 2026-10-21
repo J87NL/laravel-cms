@@ -41,13 +41,12 @@ header is sent.
 Every save or delete of these models drops all cached pages:
 
 - `Page`, `Block`, `Menu`, `MenuItem`, `SiteSettings` and `MediaAsset`;
-- `Spatie\MediaLibrary\MediaCollections\Models\Media`.
+- `Spatie\MediaLibrary\MediaCollections\Models\Media`, but only the items of a `MediaAsset`. Media of other models
+  in your app leaves the CMS page cache alone.
 
-The flush waits until the database transaction commits. It works by raising a version number stored in the cache,
-so old entries are no longer read and expire with their TTL.
-
-The `Media` observer applies to every media library item in your app, not only CMS images, so saving any media item
-also drops the CMS page cache.
+The flush waits until the database transaction commits, and a transaction that changes many models, such as a
+reorder of all blocks of a page, flushes once. A rolled back transaction flushes nothing. The flush works by raising a
+version number stored in the cache, so old entries are no longer read and expire with their TTL.
 
 Changes in code are not detected. After a deploy that changes the layout, a view, a translation or a block type, flush
 the cache:

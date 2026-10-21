@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
+use J87NL\Cms\Actions\RecordRevision;
+use J87NL\Cms\Actions\ReorderBlocks;
 use J87NL\Cms\Actions\RestoreRevision;
 use J87NL\Cms\Actions\SavePage;
+use J87NL\Cms\Cache\PageCache;
 use J87NL\Cms\Models\Revision;
 
 test('restoring a revision restores the page fields and blocks', function (): void {
@@ -75,3 +78,45 @@ test('only the latest twenty revisions are kept per page', function (): void {
         ->and(Revision::query()
             ->where('page_id', $other->id)->count())->toBe(1);
 });
+
+test('a reorder that keeps the order records no revision and leaves the cache alone', function (): void {
+    $page = makePage(['title' => 'Order']);
+    $first = addBlock($page, 'rich_text', ['html' => '<p>One</p>']);
+    $second = addBlock($page, 'rich_text', ['html' => '<p>Two</p>']);
+
+    $revisions = Revision::query()
+        ->where('page_id', $page->id)
+        ->count();
+    $version = app(PageCache::class)->version();
+
+    app(ReorderBlocks::class)->handle($page, [$first->id, $second->id], null);
+    app(ReorderBlocks::class)->move($page, $first->id, $first->id, null);
+
+    expect(Revision::query()
+        ->where('page_id', $page->id)
+        ->count())->toBe($revisions)
+        ->and(app(PageCache::class)->version())->toBe($version);
+
+    app(ReorderBlocks::class)->handle($page, [$second->id, $first->id], null);
+
+    expect(Revision::query()
+        ->where('page_id', $page->id)
+        ->count())->toBe($revisions + 1)
+        ->and(pageBlockIds($page))->toBe([$second->id, $first->id]);
+});
+
+test('at least one revision is kept whatever the configured number', function (mixed $configured, int $kept): void {
+    config()->set('cms.revisions.keep', $configured);
+
+    $page = makePage(['title' => 'Kept']);
+    app(SavePage::class)->handle($page, ['title' => 'Kept again'], null);
+
+    expect(RecordRevision::keep())->toBe($kept)
+        ->and(Revision::query()
+            ->where('page_id', $page->id)
+            ->count())->toBe(min($kept, 2));
+})->with([
+    'null' => [null, 1],
+    'zero' => [0, 1],
+    'three' => [3, 3],
+]);

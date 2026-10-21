@@ -34,8 +34,15 @@ final readonly class ContactFormState
         return $state instanceof self && $state->blockId === $blockId ? $state : null;
     }
 
+    public static function sentQuery(): string
+    {
+        $query = config('cms.contact.sent_query');
+
+        return is_string($query) && $query !== '' ? $query : self::SENT_QUERY;
+    }
+
     public static function sent(Request $request, int $blockId): bool
     {
-        return (string) $request->query(self::SENT_QUERY, '') === (string) $blockId;
+        return (string) $request->query(self::sentQuery(), '') === (string) $blockId;
     }
 }

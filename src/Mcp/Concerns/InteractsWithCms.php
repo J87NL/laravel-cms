@@ -7,6 +7,8 @@ namespace J87NL\Cms\Mcp\Concerns;
 use Closure;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -158,6 +160,14 @@ trait InteractsWithCms
         return sprintf('%%%s%%', str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $search));
     }
 
+    /**
+     * @param  Builder<Model>  $query
+     */
+    protected function likeClause(Builder $query, string $column): string
+    {
+        return sprintf("%s like ? escape '!'", $query->getQuery()->getGrammar()->wrap($query->qualifyColumn($column)));
+    }
+
     protected function findMenu(string $key): ?Menu
     {
         return Menu::query()
@@ -170,6 +180,9 @@ trait InteractsWithCms
      */
     protected function pageSchema(JsonSchema $schema): array
     {
+        $schemaTypes = PageRules::schemaTypes();
+        $schemaType = $schema->string()->description('The schema.org type of the page for structured data; WebPage when left empty.');
+
         return [
             'slug' => $schema->string()->description('The last part of the address, for example "over-ons". Derived from the title when left empty.'),
             'parent_id' => $schema->integer()->nullable()->description('The id of the parent page, or null for a top-level page.'),
@@ -179,6 +192,7 @@ trait InteractsWithCms
             'og_image_id' => $schema->integer()->description('The id of the share image, from media_list.'),
             'canonical_url' => $schema->string()->description('A full canonical address starting with https://, only when this page duplicates another one.'),
             'noindex' => $schema->boolean()->description('True to keep this page out of search engines.'),
+            'schema_type' => $schemaTypes === [] ? $schemaType : $schemaType->enum($schemaTypes),
         ];
     }
 

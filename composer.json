@@ -23,6 +23,7 @@
     },
     "require": {
         "php": "^8.5",
+        "ext-gd": "*",
         "illuminate/cache": "^13.0",
         "illuminate/database": "^13.0",
         "illuminate/http": "^13.0",

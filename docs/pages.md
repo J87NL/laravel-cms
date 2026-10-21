@@ -17,9 +17,9 @@ This page describes the model and its rules. Editors manage pages in the admin o
 | `meta_title` | A title for search engines. Replaces the generated title as is |
 | `meta_description` | A description for search engines |
 | `og_image_id` | A media asset used as share image |
-| `canonical_url` | A canonical URL, for a page that duplicates another one |
+| `canonical_url` | A canonical URL of at most 255 characters, for a page that duplicates another one |
 | `noindex` | Keep the page out of search engines, the sitemap and `llms.txt` |
-| `schema_type` | The JSON-LD type of the page, `WebPage` when empty |
+| `schema_type` | The JSON-LD type of the page, one of `cms.schema_types`; `WebPage` when empty |
 
 These are the fields in `Page::CONTENT_ATTRIBUTES`, the only ones `SavePage` fills. The other columns are managed by
 the package: `path`, `status`, `is_home`, `sort_order`, `publish_at`, `unpublish_at` and `schedule_error`.

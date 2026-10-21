@@ -242,3 +242,56 @@ test('without a recipient the form says it cannot send', function (): void {
 
     Mail::assertNothingOutgoing();
 });
+
+test('a genuine but expired token asks to try again with a fresh token and keeps the input', function (): void {
+    $this->travel(-((int) config('cms.contact.max_seconds')) - 60)->seconds();
+    $expired = app(ContactFormGuard::class)->token($this->block->id);
+    $this->travelBack();
+
+    $response = $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, [
+        ContactFormGuard::TIMESTAMP => $expired,
+    ]))
+        ->assertStatus(422)
+        ->assertSee(__('cms::blocks.contact_form.expired'))
+        ->assertSee('value="Visitor"', false);
+
+    expect($response->getContent())->not->toContain($expired);
+
+    Mail::assertNothingOutgoing();
+});
+
+test('the success query parameter can be configured', function (): void {
+    config()->set('cms.contact.sent_query', 'sent');
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))
+        ->assertStatus(303)
+        ->assertRedirect(sprintf('/contact?sent=%1$d#contact-%1$d', $this->block->id));
+
+    $this->get(sprintf('/contact?sent=%d', $this->block->id))
+        ->assertSee(__('cms::blocks.contact_form.default_success'));
+
+    $this->get(sprintf('/contact?verzonden=%d', $this->block->id))
+        ->assertDontSee(__('cms::blocks.contact_form.default_success'));
+});
+
+test('a resubmit right after an expired or invalid post is accepted', function (array $overrides): void {
+    $this->travel(-((int) config('cms.contact.max_seconds')) - 60)->seconds();
+    $expired = app(ContactFormGuard::class)->token($this->block->id);
+    $this->travelBack();
+
+    $first = $overrides === [] ? [ContactFormGuard::TIMESTAMP => $expired] : $overrides;
+
+    $response = $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, $first))
+        ->assertStatus(422);
+
+    preg_match(sprintf('/name="%s" value="([^"]+)"/', ContactFormGuard::TIMESTAMP), (string) $response->getContent(), $matches);
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, [
+        ContactFormGuard::TIMESTAMP => $matches[1] ?? '',
+    ]))->assertStatus(303);
+
+    Mail::assertQueuedCount(1);
+})->with([
+    'expired' => [[]],
+    'invalid' => [['email' => 'typo']],
+]);
