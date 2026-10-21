@@ -12,7 +12,7 @@ All notable changes to this package are documented here. The format follows [Kee
 ### Changed
 
 - The `UploadMedia` constructor takes an `UploadedImage` next to the `ImageCleaner`. Code that builds it with `new` must pass one; resolving it from the container keeps working.
-- `DeleteMedia` checks the usage and deletes inside a transaction that locks the asset row.
+- `DeleteMedia` checks the usage and deletes the rows inside a transaction that locks the asset row, and removes the files only after the commit. A rolled back delete keeps the files. The constructor takes the media library `Filesystem`.
 
 ## [0.2.2] - 2026-10-21
 

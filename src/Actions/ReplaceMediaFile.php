@@ -77,7 +77,8 @@ class ReplaceMediaFile
     {
         foreach ($previous as $item) {
             try {
-                $item->delete();
+                $this->filesystem->removeAllFiles($item);
+                $item->deleteQuietly();
             } catch (Throwable $exception) {
                 report($exception);
             }

@@ -10,6 +10,7 @@ use Illuminate\Validation\ValidationException;
 use J87NL\Cms\Actions\ReplaceMediaFile;
 use J87NL\Cms\Cache\PageCache;
 use J87NL\Cms\Models\MediaAsset;
+use Spatie\MediaLibrary\MediaCollections\Filesystem;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 beforeEach(function (): void {
@@ -200,29 +201,41 @@ test('a failure inside the replacement removes the files of the new file', funct
     }
 });
 
-test('an old file that cannot be deleted is reported and cleaned up by the next replacement', function (): void {
+test('an old file whose files cannot be removed stays retired and is cleaned up by the next replacement', function (): void {
     $exceptions = Exceptions::fake();
 
     $asset = uploadImage();
     $oldMediaId = $asset->file()->id;
+    $oldPath = $asset->file()->getPathRelativeToRoot();
+    $failing = true;
+    $filesystem = app(Filesystem::class);
 
-    Media::deleting(function (Media $media) use ($oldMediaId): void {
-        if ($media->id === $oldMediaId && ! app()->has('deleting.allowed')) {
-            throw new RuntimeException('Disk unavailable');
-        }
-    });
+    app()->instance(Filesystem::class, Mockery::mock($filesystem)
+        ->makePartial()
+        ->shouldReceive('removeAllFiles')
+        ->andReturnUsing(function (Media $media) use (&$failing, $filesystem): void {
+            if ($failing) {
+                throw new RuntimeException('Disk unavailable');
+            }
+
+            $filesystem->removeAllFiles($media);
+        })
+        ->getMock());
 
     $replaced = replaceWith($asset);
 
     expect($replaced->file()->id)->not->toBe($oldMediaId)
-        ->and(Media::query()->whereKey($oldMediaId)->exists())->toBeTrue();
+        ->and(Media::query()->findOrFail($oldMediaId)->collection_name)->toBe(ReplaceMediaFile::RETIRED_COLLECTION);
 
+    Storage::disk('public')->assertExists($oldPath);
     $exceptions->assertReported(fn (RuntimeException $exception): bool => $exception->getMessage() === 'Disk unavailable');
 
-    app()->instance('deleting.allowed', true);
+    $failing = false;
 
     $again = replaceWith($asset);
 
     expect(Media::query()->whereKey($oldMediaId)->exists())->toBeFalse()
         ->and($again->media()->count())->toBe(1);
+
+    Storage::disk('public')->assertMissing($oldPath);
 });

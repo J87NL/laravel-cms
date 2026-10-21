@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use J87NL\Cms\Actions\DeleteMedia;
@@ -223,3 +224,28 @@ test('an upload validates its details', function (array $attributes): void {
     'focal point outside' => [['alt' => 'Photo', 'focal_x' => 150]],
     'caption too long' => [['alt' => 'Photo', 'caption' => str_repeat('a', 501)]],
 ]);
+
+test('a rolled back delete keeps the asset and its files', function (): void {
+    $asset = uploadImage();
+    $paths = [
+        $asset->file()->getPathRelativeToRoot(),
+        $asset->file()->getPathRelativeToRoot('w480'),
+    ];
+
+    try {
+        DB::transaction(function () use ($asset): void {
+            app(DeleteMedia::class)->handle($asset);
+
+            throw new RuntimeException('Rolled back');
+        });
+    } catch (RuntimeException) {
+    }
+
+    expect(MediaAsset::query()
+        ->findOrFail($asset->id)
+        ->file())->not->toBeNull();
+
+    foreach ($paths as $path) {
+        Storage::disk('public')->assertExists($path);
+    }
+});
