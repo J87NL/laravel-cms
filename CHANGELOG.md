@@ -9,6 +9,11 @@ All notable changes to this package are documented here. The format follows [Kee
 - `ReplaceMediaFile` gives a media asset a new file in place. The asset keeps its id, alt text, caption and focal point, so every block that uses it shows the new file. The file gets the same checks as an upload, the conversions are made again, the old files are deleted after the transaction commits, and the page cache is flushed.
 - `J87NL\Cms\Media\UploadedImage` holds the upload size check and file naming that `UploadMedia` and `ReplaceMediaFile` share.
 
+### Changed
+
+- The `UploadMedia` constructor takes an `UploadedImage` next to the `ImageCleaner`. Code that builds it with `new` must pass one; resolving it from the container keeps working.
+- `DeleteMedia` checks the usage and deletes inside a transaction that locks the asset row.
+
 ## [0.2.2] - 2026-10-21
 
 ### Added

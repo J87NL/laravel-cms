@@ -93,7 +93,7 @@ their data fields, built from each type's `label()` and `rules()`, so custom blo
 
 ## Rules the tools follow
 
-- No tool publishes, unpublishes, schedules, makes a home page, deletes pages or uploads media. Publishing stays in the
+- No tool publishes, unpublishes, schedules, makes a home page, deletes pages or uploads media, and no tool replaces a media file. Publishing stays in the
   CMS admin, see [Publication](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/screens/publication.md) in the
   laravel-vue-cms docs.
 - `page_update` and the block tools only change draft or unpublished pages without a planned publication

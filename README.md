@@ -100,7 +100,7 @@ The package ships CMS tools on [`laravel/mcp`](https://github.com/laravel/mcp), 
 | `redirect_save` | no | no | `cms.redirects` |
 | `redirect_delete` | no | yes | `cms.redirects` |
 
-- No tool publishes, unpublishes, schedules, makes a home page, deletes pages or uploads media. Publishing stays in the CMS admin.
+- No tool publishes, unpublishes, schedules, makes a home page, deletes pages or uploads media, and no tool replaces a media file. Publishing stays in the CMS admin.
 - Page and block writes only act on draft or unpublished pages without a planned publication (`publish_at`), also for users who may publish. When the app defines the `cms.pages.write` gate (as `j87nl/laravel-vue-cms` does), the tools check it as well.
 - Writes go through the same actions and validation rules as the admin (`J87NL\Cms\Validation\PageRules` and `RedirectRules`), so validation, sanitizing, revisions and cache invalidation are the same. Menu items and redirects take effect on the live website immediately, which is why `menu_item_save` is marked destructive, like `block_remove` and `redirect_delete`: the hub starts destructive tools disabled until an admin enables them.
 - Every tool runs as the authenticated user and checks the CMS permission above. A missing user or permission returns an error result with a sentence, never an exception.

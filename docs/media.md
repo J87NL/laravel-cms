@@ -79,7 +79,8 @@ In one transaction, the action locks the asset, moves its current media item out
 new file in it and touches the asset. The media library then creates new conversions for every width in
 `cms.media.widths`, under new URLs, so browsers and proxies never keep showing the old image. The old original and its
 conversions are deleted only after the transaction commits; when it rolls back, the old file stays and the files of the
-new one are removed. Saving the new media item flushes the [page cache](page-cache.md).
+new one are removed. When deleting an old file fails after the commit, the replacement still succeeds: the error is
+reported, the old media item stays in the `replaced` collection, and the next replacement of the asset deletes it. Saving the new media item flushes the [page cache](page-cache.md).
 
 There is no MCP tool to upload or replace a file: files are only added and replaced in the admin.
 
@@ -114,7 +115,8 @@ counts the uses:
 - the site settings `og_image_id` and `entity_image_id`.
 
 `MediaUsage::counts()` returns `[assetId => count]` for all assets, `MediaUsage::count(MediaAsset $asset)` the count
-for one. Deleting an unused asset also deletes its files.
+for one. Deleting an unused asset also deletes its files. `DeleteMedia` locks the asset row while it counts and deletes,
+so a replacement that runs at the same time cannot leave files behind.
 
 ## Select options
 

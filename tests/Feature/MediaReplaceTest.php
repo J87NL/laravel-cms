@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use J87NL\Cms\Actions\ReplaceMediaFile;
 use J87NL\Cms\Cache\PageCache;
 use J87NL\Cms\Models\MediaAsset;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 beforeEach(function (): void {
     Storage::fake('public');
@@ -177,4 +179,50 @@ test('a rolled back replacement keeps the old file and its files', function (): 
     }
 
     Storage::disk('public')->assertMissing($newPath);
+});
+
+test('a failure inside the replacement removes the files of the new file', function (): void {
+    $asset = uploadImage();
+    $mediaId = $asset->file()->id;
+    $paths = storedPaths($asset);
+    $before = Storage::disk('public')->allFiles();
+
+    MediaAsset::saving(fn () => throw new RuntimeException('Touch failed'));
+
+    expect(fn () => replaceWith($asset))->toThrow(RuntimeException::class, 'Touch failed');
+
+    expect($asset->fresh()->file()->id)->toBe($mediaId)
+        ->and($asset->fresh()->media()->count())->toBe(1)
+        ->and(Storage::disk('public')->allFiles())->toBe($before);
+
+    foreach ($paths as $path) {
+        Storage::disk('public')->assertExists($path);
+    }
+});
+
+test('an old file that cannot be deleted is reported and cleaned up by the next replacement', function (): void {
+    $exceptions = Exceptions::fake();
+
+    $asset = uploadImage();
+    $oldMediaId = $asset->file()->id;
+
+    Media::deleting(function (Media $media) use ($oldMediaId): void {
+        if ($media->id === $oldMediaId && ! app()->has('deleting.allowed')) {
+            throw new RuntimeException('Disk unavailable');
+        }
+    });
+
+    $replaced = replaceWith($asset);
+
+    expect($replaced->file()->id)->not->toBe($oldMediaId)
+        ->and(Media::query()->whereKey($oldMediaId)->exists())->toBeTrue();
+
+    $exceptions->assertReported(fn (RuntimeException $exception): bool => $exception->getMessage() === 'Disk unavailable');
+
+    app()->instance('deleting.allowed', true);
+
+    $again = replaceWith($asset);
+
+    expect(Media::query()->whereKey($oldMediaId)->exists())->toBeFalse()
+        ->and($again->media()->count())->toBe(1);
 });

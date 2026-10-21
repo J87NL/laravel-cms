@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace J87NL\Cms\Actions;
 
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use J87NL\Cms\Media\ImageCleaner;
 use J87NL\Cms\Media\UploadedImage;
 use J87NL\Cms\Models\MediaAsset;
 use Spatie\MediaLibrary\MediaCollections\Filesystem;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
+use Throwable;
 
 class ReplaceMediaFile
 {
@@ -19,6 +21,7 @@ class ReplaceMediaFile
     public function __construct(
         private readonly ImageCleaner $cleaner,
         private readonly UploadedImage $upload,
+        private readonly Filesystem $filesystem,
     ) {}
 
     public function handle(MediaAsset $asset, UploadedFile $file): MediaAsset
@@ -35,10 +38,13 @@ class ReplaceMediaFile
                     ->firstOrFail();
 
                 $previous = $locked->media()
-                    ->where('collection_name', MediaAsset::COLLECTION)
+                    ->whereIn('collection_name', [
+                        MediaAsset::COLLECTION,
+                        self::RETIRED_COLLECTION,
+                    ])
                     ->get();
 
-                $previous->each(fn (Media $media): bool => $media->forceFill([
+                $previous->each(fn (Media $item): bool => $item->forceFill([
                     'collection_name' => self::RETIRED_COLLECTION,
                 ])->save());
 
@@ -51,16 +57,30 @@ class ReplaceMediaFile
                     ])
                     ->toMediaCollection(MediaAsset::COLLECTION);
 
+                DB::afterRollBack(fn () => $this->filesystem->removeAllFiles($media));
+
                 $locked->touch();
 
-                DB::afterRollBack(fn () => app(Filesystem::class)->removeAllFiles($media));
-
-                DB::afterCommit(fn () => $previous->each(fn (Media $media): ?bool => $media->delete()));
+                DB::afterCommit(fn () => $this->retire($previous));
             });
         } finally {
             $this->cleaner->remove($cleaned['path']);
         }
 
         return $asset->refresh();
+    }
+
+    /**
+     * @param  Collection<int, Media>  $previous
+     */
+    private function retire(Collection $previous): void
+    {
+        foreach ($previous as $item) {
+            try {
+                $item->delete();
+            } catch (Throwable $exception) {
+                report($exception);
+            }
+        }
     }
 }
