@@ -55,13 +55,13 @@ class PageUpdateTool extends Tool
             if ($this->writesPending($page)) {
                 $revision = $this->pendingEditor()->updatePage($page, $attributes, $this->userId($user));
 
-                return $this->pendingResponse($page, $revision, sprintf('The change to page "%s" is saved in its pending revision.', $page->title));
+                return $this->pendingResponse($revision, sprintf('The change to page "%s" is saved in its pending revision.', $page->title));
             }
 
             $savePage->handle($page, $attributes, $this->userId($user));
 
             return Response::structured([
-                'message' => sprintf('Page "%s" saved.', $page->title),
+                'message' => $this->liveMessage($page, sprintf('Page "%s" saved.', $page->title)),
                 'page' => $this->presenter->page($page->refresh()),
             ]);
         });

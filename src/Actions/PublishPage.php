@@ -4,24 +4,21 @@ declare(strict_types=1);
 
 namespace J87NL\Cms\Actions;
 
-use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use J87NL\Cms\Enums\PageStatus;
-use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\Page;
-use J87NL\Cms\Models\Revision;
 use J87NL\Cms\Pages\HomePageLock;
+use J87NL\Cms\Pages\PendingRevisionApplier;
 use J87NL\Cms\Pages\PendingRevisionEditor;
 
 class PublishPage
 {
     public function __construct(
-        private readonly SavePage $savePage,
-        private readonly RestoreRevision $restoreRevision,
         private readonly RecordRevision $recordRevision,
         private readonly ChangePageStatus $changePageStatus,
         private readonly PendingRevisionEditor $pending,
+        private readonly PendingRevisionApplier $applier,
         private readonly HomePageLock $homePageLock,
     ) {}
 
@@ -57,7 +54,7 @@ class PublishPage
         }
 
         if (! is_null($revision)) {
-            $this->apply($page, $revision);
+            $this->applier->apply($page, $revision);
         }
 
         if (! $page->isPublished()) {
@@ -67,50 +64,5 @@ class PublishPage
         }
 
         $this->recordRevision->handle($page, $userId);
-    }
-
-    private function apply(Page $page, Revision $revision): void
-    {
-        $snapshot = $revision->snapshot;
-
-        try {
-            $this->savePage->apply($page, $this->restoreRevision->pageAttributes($page, $snapshot['page']));
-        } catch (UniqueConstraintViolationException) {
-            throw SavePage::pathTaken($page);
-        }
-
-        $live = Block::query()
-            ->where('page_id', $page->id)
-            ->get()
-            ->keyBy('id');
-
-        $keptIds = [];
-
-        foreach ($snapshot['blocks'] as $blockSnapshot) {
-            $block = $live->get((int) ($blockSnapshot['id'] ?? 0)) ?? new Block;
-
-            $block->fill([
-                'type' => (string) ($blockSnapshot['type'] ?? ''),
-                'data' => is_array($blockSnapshot['data'] ?? null) ? $blockSnapshot['data'] : [],
-                'sort_order' => (int) ($blockSnapshot['sort_order'] ?? 0),
-                'is_visible' => (bool) ($blockSnapshot['is_visible'] ?? true),
-            ]);
-
-            if (! $block->exists) {
-                $block->page()->associate($page);
-            }
-
-            $block->save();
-
-            $keptIds[] = $block->id;
-        }
-
-        Block::query()
-            ->where('page_id', $page->id)
-            ->whereNotIn('id', $keptIds)
-            ->get()
-            ->each(fn (Block $block): ?bool => $block->delete());
-
-        $revision->delete();
     }
 }

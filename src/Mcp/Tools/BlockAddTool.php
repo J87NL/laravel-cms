@@ -67,7 +67,7 @@ class BlockAddTool extends Tool
             if ($this->writesPending($page)) {
                 [$revision, $added] = $this->pendingEditor()->addBlock($page, $type, $data, $this->userId($user));
 
-                return $this->pendingResponse($page, $revision, sprintf('Block %d (%s) is added to the pending revision of page "%s".', $added['id'], $type->key(), $page->title), [
+                return $this->pendingResponse($revision, sprintf('Block %d (%s) is added to the pending revision of page "%s".', $added['id'], $type->key(), $page->title), [
                     'block' => $this->presenter->pendingBlock($added),
                 ]);
             }
@@ -75,7 +75,7 @@ class BlockAddTool extends Tool
             $block = $saveBlock->handle($page, new Block, $type, $data, $this->userId($user));
 
             return Response::structured([
-                'message' => sprintf('Block %d (%s) added to page "%s".', $block->id, $type->key(), $page->title),
+                'message' => $this->liveMessage($page, sprintf('Block %d (%s) added to page "%s".', $block->id, $type->key(), $page->title)),
                 'block' => $this->presenter->block($block->refresh()),
             ]);
         });

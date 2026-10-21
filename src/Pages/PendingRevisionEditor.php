@@ -32,7 +32,46 @@ class PendingRevisionEditor
      */
     public function snapshot(Page $page): array
     {
-        return $this->find($page)?->snapshot ?? $this->recordRevision->snapshot($page);
+        $revision = $this->find($page);
+
+        if (is_null($revision)) {
+            return $this->recordRevision->snapshot($page);
+        }
+
+        return self::content($revision->snapshot);
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     * @return array{page: array<string, mixed>, blocks: list<array<string, mixed>>}
+     */
+    public static function content(array $snapshot): array
+    {
+        return [
+            'page' => is_array($snapshot['page'] ?? null) ? $snapshot['page'] : [],
+            'blocks' => array_values(is_array($snapshot['blocks'] ?? null) ? $snapshot['blocks'] : []),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     * @return array{page: array<string, mixed>, blocks: list<array<string, mixed>>}|null
+     */
+    public static function base(array $snapshot): ?array
+    {
+        $base = $snapshot['pending']['base'] ?? null;
+
+        return is_array($base) ? self::content($base) : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     */
+    public static function editedBy(array $snapshot): ?int
+    {
+        $editedBy = $snapshot['pending']['edited_by'] ?? null;
+
+        return is_numeric($editedBy) ? (int) $editedBy : null;
     }
 
     /**
@@ -52,7 +91,7 @@ class PendingRevisionEditor
     /**
      * @param  array<string, mixed>  $attributes
      */
-    public function updatePage(Page $page, array $attributes, ?int $userId): Revision
+    public function updatePage(Page $page, array $attributes, ?int $userId): ?Revision
     {
         $changes = Arr::only($attributes, Page::CONTENT_ATTRIBUTES);
 
@@ -72,18 +111,17 @@ class PendingRevisionEditor
 
     /**
      * @param  array<string, mixed>  $data
-     * @return array{Revision, array<string, mixed>}
+     * @return array{Revision|null, array<string, mixed>}
      */
     public function addBlock(Page $page, BlockType $type, array $data, ?int $userId): array
     {
         $added = [];
 
         $revision = $this->change($page, $userId, function (array $snapshot) use ($type, $data, &$added): array {
-            $ids = array_map(fn (array $block): int => (int) ($block['id'] ?? 0), $snapshot['blocks']);
             $orders = array_map(fn (array $block): int => (int) ($block['sort_order'] ?? 0), $snapshot['blocks']);
 
             $added = [
-                'id' => min([0, ...$ids]) - 1,
+                'id' => $this->nextNewId($snapshot),
                 'type' => $type->key(),
                 'data' => $type->prepare($data),
                 'sort_order' => max([0, ...$orders]) + 1,
@@ -91,6 +129,7 @@ class PendingRevisionEditor
             ];
 
             $snapshot['blocks'][] = $added;
+            $snapshot['pending']['next_new_id'] = $added['id'] - 1;
 
             return $snapshot;
         });
@@ -104,7 +143,7 @@ class PendingRevisionEditor
     /**
      * @param  array<string, mixed>  $data
      */
-    public function updateBlock(Page $page, int $blockId, BlockType $type, array $data, ?int $userId): Revision
+    public function updateBlock(Page $page, int $blockId, BlockType $type, array $data, ?int $userId): ?Revision
     {
         return $this->change($page, $userId, function (array $snapshot) use ($blockId, $type, $data): array {
             foreach ($snapshot['blocks'] as $index => $block) {
@@ -119,7 +158,7 @@ class PendingRevisionEditor
         });
     }
 
-    public function removeBlock(Page $page, int $blockId, ?int $userId): Revision
+    public function removeBlock(Page $page, int $blockId, ?int $userId): ?Revision
     {
         return $this->change($page, $userId, function (array $snapshot) use ($blockId): array {
             $snapshot['blocks'] = array_values(array_filter(
@@ -134,7 +173,7 @@ class PendingRevisionEditor
     /**
      * @param  list<int>  $blockIds
      */
-    public function reorderBlocks(Page $page, array $blockIds, ?int $userId): Revision
+    public function reorderBlocks(Page $page, array $blockIds, ?int $userId): ?Revision
     {
         return $this->change($page, $userId, function (array $snapshot) use ($blockIds): array {
             $current = array_map(fn (array $block): int => (int) ($block['id'] ?? 0), $snapshot['blocks']);
@@ -173,15 +212,22 @@ class PendingRevisionEditor
     }
 
     /**
-     * @param  callable(array{page: array<string, mixed>, blocks: list<array<string, mixed>>}): array{page: array<string, mixed>, blocks: list<array<string, mixed>>}  $mutate
+     * @param  callable(array<string, mixed>): array<string, mixed>  $mutate
      */
-    private function change(Page $page, ?int $userId, callable $mutate): Revision
+    private function change(Page $page, ?int $userId, callable $mutate): ?Revision
     {
         $revision = $this->find($page);
 
         if (is_null($revision)) {
+            $live = $this->recordRevision->snapshot($page);
+
             $revision = new Revision([
-                'snapshot' => $this->recordRevision->snapshot($page),
+                'snapshot' => [
+                    ...$live,
+                    'pending' => [
+                        'base' => $live,
+                    ],
+                ],
                 'is_pending' => true,
                 'created_by' => $userId,
             ]);
@@ -189,9 +235,73 @@ class PendingRevisionEditor
             $revision->page()->associate($page);
         }
 
-        $revision->snapshot = $mutate($revision->snapshot);
+        $snapshot = $mutate($revision->snapshot);
+        $snapshot['pending']['edited_by'] = $userId;
+
+        if (! self::changes($snapshot)) {
+            if ($revision->exists) {
+                $revision->delete();
+            }
+
+            return null;
+        }
+
+        $revision->snapshot = $snapshot;
         $revision->save();
 
         return $revision;
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     */
+    public static function changes(array $snapshot): bool
+    {
+        $base = self::base($snapshot);
+
+        if (is_null($base)) {
+            return true;
+        }
+
+        $content = self::content($snapshot);
+
+        return self::comparable($content) !== self::comparable($base);
+    }
+
+    /**
+     * @param  array{page: array<string, mixed>, blocks: list<array<string, mixed>>}  $content
+     * @return array<string, mixed>
+     */
+    private static function comparable(array $content): array
+    {
+        $blocks = $content['blocks'];
+
+        usort($blocks, fn (array $a, array $b): int => (int) ($a['sort_order'] ?? 0) <=> (int) ($b['sort_order'] ?? 0));
+
+        return [
+            'page' => array_map(fn (mixed $value): string => (string) json_encode($value), Arr::only($content['page'], Page::CONTENT_ATTRIBUTES)),
+            'blocks' => array_map(fn (array $block): string => (string) json_encode([
+                (int) ($block['id'] ?? 0),
+                $block['type'] ?? null,
+                $block['data'] ?? null,
+                (bool) ($block['is_visible'] ?? true),
+            ]), $blocks),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     */
+    private function nextNewId(array $snapshot): int
+    {
+        $next = $snapshot['pending']['next_new_id'] ?? null;
+
+        if (is_numeric($next)) {
+            return (int) $next;
+        }
+
+        $ids = array_map(fn (array $block): int => (int) ($block['id'] ?? 0), self::content($snapshot)['blocks']);
+
+        return min([0, ...$ids]) - 1;
     }
 }

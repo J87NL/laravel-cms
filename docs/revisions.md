@@ -62,7 +62,9 @@ $revision->author; // the user who made it, or null
 
 A pending revision is a `Revision` with `is_pending` set. It holds the page fields and blocks as they will be after
 publishing, in the same snapshot format, and a block keeps its live `id` there. Blocks that only exist in the pending
-revision have a negative id. The public page, the page cache and the revision history ignore it.
+revision have a negative id. Under `pending` the snapshot also keeps `base` (the live page when the revision started),
+`edited_by` (the user of the last change) and `next_new_id`. The public page, the page cache and the revision history
+ignore it. Only a published page has one: taking a page offline applies it to the page.
 
 The MCP draft tools create and change it, see [MCP tools](mcp-tools.md#draft-and-live-mode). In code,
 `J87NL\Cms\Pages\PendingRevisionEditor` does the same: `updatePage()`, `addBlock()`, `updateBlock()`,
@@ -77,9 +79,10 @@ app(PublishPage::class)->handle($page, userId: auth()->id());
 app(DiscardPendingRevision::class)->handle($page);
 ```
 
-`PublishPage` replaces the live page fields and blocks with the pending ones (blocks are matched by id, new ones are
-created and removed ones deleted), deletes the pending revision, publishes the page when it is not published yet and
-records a revision. A published page without a pending revision, or a page with a planned publication, is refused with
+`PublishPage` applies what the pending revision changed compared with its base (`J87NL\Cms\Pages\PendingRevisionApplier`):
+changed fields and blocks are written, blocks are matched by id, new ones are created and removed ones deleted, and
+everything the pending revision left alone keeps its live value. It then deletes the pending revision, publishes the
+page when it is not published yet and records a revision. A published page without a pending revision, or a page with a planned publication, is refused with
 a `ValidationException`. Images used in a pending revision count as in use (see [Media](media.md)).
 
 `Revision::author()` belongs to `cms.user_model`, or to `auth.providers.users.model` when that is `null`.

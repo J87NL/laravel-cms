@@ -21,7 +21,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('block_remove')]
 #[Title('Remove CMS block')]
-#[Description('Removes a block; confirm with the user first. On a published page the block is removed from the pending revision of the page and the live page keeps it until page_publish; on a draft or unpublished page it is removed directly. The previous version stays in the page revisions and can be restored in the CMS admin, but only the most recent revisions are kept (cms.revisions.keep, 20 by default), so many later changes make it unrecoverable. Pass page_id for a block that only exists in the pending revision (a negative id). Pages with a planned publication are refused. To remove a block from a published page directly, use block_remove_live.')]
+#[Description('Removes a block; confirm with the user first. On a published page the block is removed from the pending revision of the page and the live page keeps it until page_publish; on a draft or unpublished page it is removed directly. The previous version stays in the page revisions and can be restored in the CMS admin, but only the most recent revisions are kept (cms.revisions.keep, 20 by default), so many later changes make it unrecoverable. Pass page_id for a block that is not on the live page, such as a block added to the pending revision (a negative id). Pages with a planned publication are refused. To remove a block from a published page directly, use block_remove_live.')]
 #[IsReadOnly(false)]
 #[IsDestructive]
 class BlockRemoveTool extends Tool
@@ -56,7 +56,7 @@ class BlockRemoveTool extends Tool
 
                 $revision = $this->pendingEditor()->removeBlock($page, $blockId, $this->userId($user));
 
-                return $this->pendingResponse($page, $revision, sprintf('Block %d is removed from the pending revision of page "%s".', $blockId, $page->title), [
+                return $this->pendingResponse($revision, sprintf('Block %d is removed from the pending revision of page "%s".', $blockId, $page->title), [
                     'page_id' => $page->id,
                 ]);
             }
@@ -70,7 +70,7 @@ class BlockRemoveTool extends Tool
             $deleteBlock->handle($block, $this->userId($user));
 
             return Response::structured([
-                'message' => sprintf('Block %d removed from page "%s".', $block->id, $page->title),
+                'message' => $this->liveMessage($page, sprintf('Block %d removed from page "%s".', $block->id, $page->title)),
                 'page_id' => $page->id,
             ]);
         });
@@ -83,7 +83,7 @@ class BlockRemoveTool extends Tool
     {
         return [
             'block_id' => $schema->integer()->description('The id of the block, from page_get.')->required(),
-            'page_id' => $schema->integer()->description('The id of the page; needed for a block that only exists in the pending revision.'),
+            'page_id' => $schema->integer()->description('The id of the page; needed for a block that is not on the live page, such as a negative id from the pending revision.'),
         ];
     }
 }

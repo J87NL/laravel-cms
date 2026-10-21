@@ -37,7 +37,7 @@ class BlockUpdateTool extends Tool
 
     protected function modeDescription(): string
     {
-        return 'Replaces the data of a block; pass every field of the block, as page_get shows them. On a published page the change is stored in the pending revision of the page and the live page stays as it is until page_publish; on a draft or unpublished page it is saved directly. Pass page_id for a block that only exists in the pending revision (a negative id). Pages with a planned publication are refused. To change a block on a published page directly, use block_update_live.';
+        return 'Replaces the data of a block; pass every field of the block, as page_get shows them. On a published page the change is stored in the pending revision of the page and the live page stays as it is until page_publish; on a draft or unpublished page it is saved directly. Pass page_id for a block that is not on the live page, such as a block added to the pending revision (a negative id). Pages with a planned publication are refused. To change a block on a published page directly, use block_update_live.';
     }
 
     public function handle(Request $request, SaveBlock $saveBlock, BlockRegistry $registry): Response|ResponseFactory
@@ -79,8 +79,8 @@ class BlockUpdateTool extends Tool
 
                 $revision = $this->pendingEditor()->updateBlock($page, $blockId, $type, $data, $this->userId($user));
 
-                return $this->pendingResponse($page, $revision, sprintf('Block %d is changed in the pending revision of page "%s".', $blockId, $page->title), [
-                    'block' => $this->presenter->pendingBlock((array) $this->pendingEditor()->block($page, $blockId)),
+                return $this->pendingResponse($revision, sprintf('Block %d is changed in the pending revision of page "%s".', $blockId, $page->title), [
+                    'block' => $this->presenter->pendingBlock($this->pendingEditor()->block($page, $blockId) ?? $pendingBlock),
                 ]);
             }
 
@@ -101,7 +101,7 @@ class BlockUpdateTool extends Tool
             $saveBlock->handle($page, $block, $type, $data, $this->userId($user));
 
             return Response::structured([
-                'message' => sprintf('Block %d on page "%s" saved.', $block->id, $page->title),
+                'message' => $this->liveMessage($page, sprintf('Block %d on page "%s" saved.', $block->id, $page->title)),
                 'block' => $this->presenter->block($block->refresh()),
             ]);
         });
@@ -114,7 +114,7 @@ class BlockUpdateTool extends Tool
     {
         return [
             'block_id' => $schema->integer()->description('The id of the block, from page_get.')->required(),
-            'page_id' => $schema->integer()->description('The id of the page; needed for a block that only exists in the pending revision.'),
+            'page_id' => $schema->integer()->description('The id of the page; needed for a block that is not on the live page, such as a negative id from the pending revision.'),
             'data' => $schema->object()->description('All fields of the block for its type, see the tool description.')->required(),
         ];
     }

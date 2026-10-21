@@ -50,8 +50,10 @@ class RevisionDiscardTool extends Tool
             return $this->pageNotFound((int) $data['page_id']);
         }
 
-        if (! is_null($page->publish_at)) {
-            return Response::error(sprintf('Page %d "%s" is scheduled to be published on %s, so these tools cannot change it. Change the page or its schedule in the CMS admin.', $page->id, $page->title, $page->publish_at->toIso8601String()));
+        $refusal = $this->publicationRefusal($user, $page);
+
+        if (! is_null($refusal)) {
+            return $refusal;
         }
 
         if (! $discardPendingRevision->handle($page)) {

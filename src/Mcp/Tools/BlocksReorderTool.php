@@ -51,13 +51,13 @@ class BlocksReorderTool extends Tool
             if ($this->writesPending($page)) {
                 $revision = $this->pendingEditor()->reorderBlocks($page, $blockIds, $this->userId($user));
 
-                return $this->pendingResponse($page, $revision, sprintf('The new block order of page "%s" is saved in its pending revision.', $page->title));
+                return $this->pendingResponse($revision, sprintf('The new block order of page "%s" is saved in its pending revision.', $page->title));
             }
 
             $reorderBlocks->handle($page, $blockIds, $this->userId($user));
 
             return Response::structured([
-                'message' => sprintf('The blocks of page "%s" are reordered.', $page->title),
+                'message' => $this->liveMessage($page, sprintf('The blocks of page "%s" are reordered.', $page->title)),
                 'blocks' => $this->presenter->page($page)['blocks'],
             ]);
         });

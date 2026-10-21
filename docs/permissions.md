@@ -77,7 +77,9 @@ and a published page only with `cms.pages.publish` as well. See
 For the MCP tools the admin's rule only matters for direct writes: a live tool on a published page needs
 `cms.pages.publish`, which the live tools check anyway. A draft tool on a published page writes to the page's pending
 revision and does not check the gate, so an editor with only `cms.pages.edit` can propose changes that someone with
-`cms.pages.publish` publishes (see [MCP tools](mcp-tools.md#draft-and-live-mode)).
+`cms.pages.publish` publishes (see [MCP tools](mcp-tools.md#draft-and-live-mode)). `page_publish`, `page_unpublish`
+and `revision_discard` check the gate, so your own rules (such as the home page example above) also decide who may put
+a proposal live.
 
 Your own `Gate::define('cms.pages.write', ...)` replaces the admin's gate, because app service providers boot after
 package providers. Admin users would then lose the published-page rule without any warning. To add your own rule,

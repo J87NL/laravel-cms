@@ -100,19 +100,48 @@ trait InteractsWithCms
 
     protected function pageWriteRefusal(Authenticatable $user, Page $page): ?Response
     {
-        if (! is_null($page->publish_at)) {
-            return Response::error(sprintf('Page %d "%s" is scheduled to be published on %s, so these tools cannot change it. Change the page or its schedule in the CMS admin.', $page->id, $page->title, $page->publish_at->toIso8601String()));
+        if (! $this->writesPending($page) && $this->gateRefuses($user, $page)) {
+            return $this->gateRefusal($page);
         }
 
-        if ($this->writesPending($page)) {
+        return $this->scheduledRefusal($page);
+    }
+
+    protected function publicationRefusal(Authenticatable $user, Page $page): ?Response
+    {
+        if ($this->gateRefuses($user, $page)) {
+            return $this->gateRefusal($page);
+        }
+
+        return $this->scheduledRefusal($page);
+    }
+
+    protected function gateRefuses(Authenticatable $user, Page $page): bool
+    {
+        return Gate::has(CmsTools::PAGE_WRITE_ABILITY) && ! Gate::forUser($user)->allows(CmsTools::PAGE_WRITE_ABILITY, $page);
+    }
+
+    protected function gateRefusal(Page $page): Response
+    {
+        return Response::error(sprintf('You may not change page %d "%s". Ask an administrator of this site for access, or make the change in the CMS admin.', $page->id, $page->title));
+    }
+
+    protected function scheduledRefusal(Page $page): ?Response
+    {
+        if (is_null($page->publish_at)) {
             return null;
         }
 
-        if (Gate::has(CmsTools::PAGE_WRITE_ABILITY) && ! Gate::forUser($user)->allows(CmsTools::PAGE_WRITE_ABILITY, $page)) {
-            return Response::error(sprintf('You may not change page %d "%s". Ask an administrator of this site for access, or make the change in the CMS admin.', $page->id, $page->title));
+        return Response::error(sprintf('Page %d "%s" is scheduled to be published on %s, so these tools cannot change it. Change the page or its schedule in the CMS admin.', $page->id, $page->title, $page->publish_at->toIso8601String()));
+    }
+
+    protected function liveMessage(Page $page, string $message): string
+    {
+        if ($this->mode() !== EditMode::Live || is_null($this->pendingEditor()->find($page))) {
+            return $message;
         }
 
-        return null;
+        return sprintf('%s The page also has a pending revision; publishing it keeps this change, unless the pending revision changes the same page field or block.', $message);
     }
 
     protected function mode(): EditMode
@@ -155,8 +184,16 @@ trait InteractsWithCms
     /**
      * @param  array<string, mixed>  $extra
      */
-    protected function pendingResponse(Page $page, Revision $revision, string $message, array $extra = []): ResponseFactory
+    protected function pendingResponse(?Revision $revision, string $message, array $extra = []): ResponseFactory
     {
+        if (is_null($revision)) {
+            return Response::structured([
+                'message' => 'The pending revision now matches the live page, so there is no pending revision any more. The live page is unchanged.',
+                ...$extra,
+                'pending_revision' => null,
+            ]);
+        }
+
         return Response::structured([
             'message' => sprintf('%s The live page is unchanged until someone publishes the pending revision with page_publish or in the CMS admin.', $message),
             ...$extra,

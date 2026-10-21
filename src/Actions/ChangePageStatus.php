@@ -10,6 +10,8 @@ use J87NL\Cms\Enums\PageStatus;
 use J87NL\Cms\Models\Page;
 use J87NL\Cms\Pages\HomePageLock;
 use J87NL\Cms\Pages\PageVisibility;
+use J87NL\Cms\Pages\PendingRevisionApplier;
+use J87NL\Cms\Pages\PendingRevisionEditor;
 
 class ChangePageStatus
 {
@@ -17,6 +19,8 @@ class ChangePageStatus
         private readonly RecordRevision $recordRevision,
         private readonly HomePageLock $homePageLock,
         private readonly PageVisibility $visibility,
+        private readonly PendingRevisionEditor $pending,
+        private readonly PendingRevisionApplier $applier,
     ) {}
 
     public function handle(Page $page, PageStatus $status, ?int $userId): void
@@ -46,6 +50,12 @@ class ChangePageStatus
             throw ValidationException::withMessages([
                 'page' => $reason,
             ]);
+        }
+
+        $pending = $status === PageStatus::Published ? null : $this->pending->find($locked);
+
+        if (! is_null($pending)) {
+            $this->applier->apply($locked, $pending);
         }
 
         $locked->status = $status;

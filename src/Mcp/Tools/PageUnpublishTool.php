@@ -23,7 +23,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('page_unpublish')]
 #[Title('Unpublish CMS page')]
-#[Description('Takes a published page offline: visitors get a not-found page and the page cache is flushed. The home page, and a page that contains the home page, cannot be taken offline. A pending revision of the page is kept. Needs the CMS publish permission. Pages with a planned publication are refused. Confirm with the user first.')]
+#[Description('Takes a published page offline: visitors get a not-found page and the page cache is flushed. The home page, and a page that contains the home page, cannot be taken offline. A pending revision of the page is applied to the page as it goes offline, so its changes are kept and edits to the offline page go to the page directly. Needs the CMS publish permission. Pages with a planned publication are refused. Confirm with the user first.')]
 #[IsReadOnly(false)]
 #[IsDestructive]
 class PageUnpublishTool extends Tool
@@ -51,8 +51,10 @@ class PageUnpublishTool extends Tool
             return $this->pageNotFound((int) $data['page_id']);
         }
 
-        if (! is_null($page->publish_at)) {
-            return Response::error(sprintf('Page %d "%s" is scheduled to be published on %s, so these tools cannot change it. Change the page or its schedule in the CMS admin.', $page->id, $page->title, $page->publish_at->toIso8601String()));
+        $refusal = $this->publicationRefusal($user, $page);
+
+        if (! is_null($refusal)) {
+            return $refusal;
         }
 
         if (! $page->isPublished()) {

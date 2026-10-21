@@ -11,6 +11,7 @@ use J87NL\Cms\Models\MediaAsset;
 use J87NL\Cms\Models\Page;
 use J87NL\Cms\Models\Revision;
 use J87NL\Cms\Models\SiteSettings;
+use J87NL\Cms\Pages\PendingRevisionEditor;
 
 class MediaUsage
 {
@@ -24,6 +25,7 @@ class MediaUsage
     public function counts(): array
     {
         $counts = [];
+        $liveIds = [];
         $types = array_filter(
             $this->registry->registered(),
             fn (mixed $type): bool => $type instanceof ReferencesMedia,
@@ -34,28 +36,37 @@ class MediaUsage
                 ->whereIn('type', array_keys($types))
                 ->select([
                     'id',
+                    'page_id',
                     'type',
                     'data',
                 ])
                 ->lazyById(200)
-                ->each(function (Block $block) use ($types, &$counts): void {
+                ->each(function (Block $block) use ($types, &$counts, &$liveIds): void {
                     foreach (array_unique($types[$block->type]->mediaIds($block->data)) as $id) {
                         $counts[$id] = ($counts[$id] ?? 0) + 1;
+                        $liveIds[$block->page_id][$id] = true;
                     }
                 });
         }
 
-        $pendingImageIds = [];
+        $pageImageIds = array_map('intval', Page::query()
+            ->whereNotNull('og_image_id')
+            ->pluck('og_image_id', 'id')
+            ->all());
 
         Revision::query()
             ->pending()
             ->select([
                 'id',
+                'page_id',
                 'snapshot',
             ])
             ->lazyById(200)
-            ->each(function (Revision $revision) use ($types, &$counts, &$pendingImageIds): void {
-                foreach ($revision->snapshot['blocks'] as $block) {
+            ->each(function (Revision $revision) use ($types, $pageImageIds, &$counts, &$liveIds): void {
+                $content = PendingRevisionEditor::content($revision->snapshot);
+                $pendingIds = [];
+
+                foreach ($content['blocks'] as $block) {
                     $type = $types[(string) ($block['type'] ?? '')] ?? null;
                     $data = $block['data'] ?? null;
 
@@ -63,22 +74,28 @@ class MediaUsage
                         continue;
                     }
 
-                    foreach (array_unique($type->mediaIds($data)) as $id) {
-                        $counts[$id] = ($counts[$id] ?? 0) + 1;
-                    }
+                    array_push($pendingIds, ...$type->mediaIds($data));
                 }
 
-                $pendingImageIds[] = $revision->snapshot['page']['og_image_id'] ?? null;
+                $imageId = $content['page']['og_image_id'] ?? null;
+
+                if (is_numeric($imageId) && (int) $imageId !== ($pageImageIds[$revision->page_id] ?? null)) {
+                    $pendingIds[] = (int) $imageId;
+                }
+
+                foreach (array_unique($pendingIds) as $id) {
+                    if (isset($liveIds[$revision->page_id][$id])) {
+                        continue;
+                    }
+
+                    $counts[$id] = ($counts[$id] ?? 0) + 1;
+                }
             });
 
         $settings = SiteSettings::current();
 
         $referencedIds = [
-            ...Page::query()
-                ->whereNotNull('og_image_id')
-                ->pluck('og_image_id')
-                ->all(),
-            ...$pendingImageIds,
+            ...array_values($pageImageIds),
             $settings->og_image_id,
             $settings->entity_image_id,
         ];

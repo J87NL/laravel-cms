@@ -503,3 +503,207 @@ it('counts media in a pending revision as in use', function (): void {
 
     expect(app(MediaUsage::class)->count($asset))->toBe(1);
 });
+
+it('checks the write gate before publishing, taking offline or discarding', function (string $tool): void {
+    makePage(['title' => 'Home', 'slug' => 'home'], home: true);
+    $page = pendingPage();
+
+    Gate::define(CmsTools::PAGE_WRITE_ABILITY, fn (Authorizable $user, Page $page): bool => $page->title !== 'Live');
+
+    CmsTestServer::actingAs(publisher())
+        ->tool($tool, ['page_id' => $page->id])
+        ->assertHasErrors(['You may not change page']);
+
+    expect($page->refresh()->title)->toBe('Live')
+        ->and($page->status)->toBe(PageStatus::Published)
+        ->and($page->pendingRevision()->exists())->toBeTrue();
+})->with([
+    'page_publish' => [PagePublishTool::class],
+    'page_unpublish' => [PageUnpublishTool::class],
+    'revision_discard' => [RevisionDiscardTool::class],
+]);
+
+it('lets a proposal on a gated page wait for someone the gate allows', function (): void {
+    $page = makePage(['title' => 'Live']);
+
+    Gate::define(CmsTools::PAGE_WRITE_ABILITY, fn (Authorizable $user, Page $page): bool => false);
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'title' => 'Voorstel'])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(PagePublishTool::class, ['page_id' => $page->id])
+        ->assertHasErrors(['You may not change page']);
+
+    expect($page->refresh()->title)->toBe('Live');
+});
+
+it('applies the pending revision to a page that is taken offline, so later edits are not overwritten', function (): void {
+    makePage(['title' => 'Home', 'slug' => 'home'], home: true);
+    $page = makePage(['title' => 'Live', 'slug' => 'live']);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'title' => 'Voorstel'])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(PageUnpublishTool::class, ['page_id' => $page->id])
+        ->assertOk();
+
+    expect($page->refresh()->title)->toBe('Voorstel')
+        ->and($page->status)->toBe(PageStatus::Unpublished)
+        ->and($page->pendingRevision()->exists())->toBeFalse();
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'title' => 'Nieuwste'])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(PagePublishTool::class, ['page_id' => $page->id])
+        ->assertOk();
+
+    expect($page->refresh()->title)->toBe('Nieuwste')
+        ->and($page->status)->toBe(PageStatus::Published);
+});
+
+it('publishes only what the pending revision changed, and keeps later live changes', function (): void {
+    makePage(['title' => 'Home', 'slug' => 'home'], home: true);
+    $page = makePage(['title' => 'Live', 'slug' => 'live', 'meta_title' => 'Oud']);
+    $changed = addBlock($page, 'rich_text', ['html' => '<p>A</p>']);
+    $removedLive = addBlock($page, 'rich_text', ['html' => '<p>B</p>']);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(BlockUpdateTool::class, ['block_id' => $changed->id, 'data' => ['html' => '<p>A nieuw</p>']])
+        ->assertOk();
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'meta_title' => 'Voorstel'])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(BlockAddLiveTool::class, ['page_id' => $page->id, 'type' => 'rich_text', 'data' => ['html' => '<p>Live erbij</p>']])
+        ->assertOk()
+        ->assertSee('also has a pending revision');
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(BlockRemoveLiveTool::class, ['block_id' => $removedLive->id])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(PageUpdateLiveTool::class, ['page_id' => $page->id, 'slug' => 'verhuisd'])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(PagePublishTool::class, ['page_id' => $page->id])
+        ->assertOk();
+
+    expect($page->refresh()->slug)->toBe('verhuisd')
+        ->and($page->meta_title)->toBe('Voorstel')
+        ->and(array_map(fn (array $block): mixed => $block[1], liveBlockSummary($page)))->toBe([
+            '<p>A nieuw</p>',
+            '<p>Live erbij</p>',
+        ])
+        ->and($changed->refresh()->data['html'])->toBe('<p>A nieuw</p>');
+});
+
+it('applies a new block order from the pending revision and keeps live-only blocks after it', function (): void {
+    makePage(['title' => 'Home', 'slug' => 'home'], home: true);
+    $page = makePage(['title' => 'Live', 'slug' => 'live']);
+    $first = addBlock($page, 'rich_text', ['html' => '<p>1</p>']);
+    $second = addBlock($page, 'rich_text', ['html' => '<p>2</p>']);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(BlocksReorderTool::class, ['page_id' => $page->id, 'block_ids' => [$second->id, $first->id]])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(BlockAddLiveTool::class, ['page_id' => $page->id, 'type' => 'rich_text', 'data' => ['html' => '<p>live</p>']])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(PagePublishTool::class, ['page_id' => $page->id])
+        ->assertOk();
+
+    expect(array_map(fn (array $block): mixed => $block[1], liveBlockSummary($page)))->toBe([
+        '<p>2</p>',
+        '<p>1</p>',
+        '<p>live</p>',
+    ]);
+});
+
+it('keeps no pending revision for a draft that changes nothing', function (): void {
+    $page = makePage(['title' => 'Live']);
+    $first = addBlock($page, 'rich_text', ['html' => '<p>1</p>']);
+    $second = addBlock($page, 'rich_text', ['html' => '<p>2</p>']);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(BlocksReorderTool::class, ['page_id' => $page->id, 'block_ids' => [$first->id, $second->id]])
+        ->assertOk()
+        ->assertStructuredContent(fn (AssertableJson $json): AssertableJson => $json
+            ->where('pending_revision', null)
+            ->etc());
+
+    expect($page->pendingRevision()->exists())->toBeFalse();
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'title' => 'Anders'])
+        ->assertOk();
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'title' => 'Live'])
+        ->assertOk();
+
+    expect($page->pendingRevision()->exists())->toBeFalse();
+});
+
+it('never reuses the id of a removed pending block', function (): void {
+    $page = makePage(['title' => 'Live']);
+    $editor = cmsUser(CmsPermission::PagesEdit);
+    $add = fn (): mixed => CmsTestServer::actingAs($editor)
+        ->tool(BlockAddTool::class, ['page_id' => $page->id, 'type' => 'rich_text', 'data' => ['html' => '<p>x</p>']])
+        ->assertOk();
+
+    $add();
+    $add();
+
+    CmsTestServer::actingAs($editor)
+        ->tool(BlockRemoveTool::class, ['page_id' => $page->id, 'block_id' => -2])
+        ->assertOk();
+
+    $add()->assertStructuredContent(fn (AssertableJson $json): AssertableJson => $json
+        ->where('block.id', -3)
+        ->etc());
+});
+
+it('records who changed the pending revision last', function (): void {
+    $page = makePage(['title' => 'Live']);
+    $first = cmsUser(CmsPermission::PagesEdit);
+    $second = cmsUser(CmsPermission::PagesEdit);
+
+    CmsTestServer::actingAs($first)
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'title' => 'Een'])
+        ->assertOk();
+
+    CmsTestServer::actingAs($second)
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'title' => 'Twee'])
+        ->assertOk()
+        ->assertStructuredContent(fn (AssertableJson $json): AssertableJson => $json
+            ->where('pending_revision.created_by', $first->id)
+            ->where('pending_revision.edited_by', $second->id)
+            ->etc());
+});
+
+it('counts an image once when the live page and its pending revision both use it', function (): void {
+    $asset = uploadImage();
+    $shareImage = uploadImage();
+    $page = makePage(['title' => 'Live']);
+    addBlock($page, 'image', ['media_id' => $asset->id]);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'og_image_id' => $shareImage->id])
+        ->assertOk();
+
+    expect(app(MediaUsage::class)->count($asset))->toBe(1)
+        ->and(app(MediaUsage::class)->count($shareImage))->toBe(1);
+});

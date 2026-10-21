@@ -50,17 +50,23 @@ class PagePublishTool extends Tool
             return $this->pageNotFound((int) $data['page_id']);
         }
 
-        if (! is_null($page->publish_at)) {
-            return Response::error(sprintf('Page %d "%s" is scheduled to be published on %s, so these tools cannot change it. Change the page or its schedule in the CMS admin.', $page->id, $page->title, $page->publish_at->toIso8601String()));
+        $refusal = $this->publicationRefusal($user, $page);
+
+        if (! is_null($refusal)) {
+            return $refusal;
         }
 
         $publishPage->handle($page, $this->userId($user));
 
         $page->refresh();
+        $presented = $this->presenter->page($page);
+        $message = $presented['is_public']
+            ? sprintf('Page "%s" is published at %s.', $page->title, $page->url())
+            : sprintf('Page "%s" is published, but stays hidden from visitors until its parent pages are published too.', $page->title);
 
         return Response::structured([
-            'message' => sprintf('Page "%s" is published at %s.', $page->title, $page->url()),
-            'page' => $this->presenter->page($page),
+            'message' => $message,
+            'page' => $presented,
         ]);
     }
 

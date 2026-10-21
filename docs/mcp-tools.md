@@ -89,17 +89,27 @@ annotations (and the hub's destructive switch) apply per tool:
 ### Pending revisions
 
 A published page has at most one pending revision: a revision row with `is_pending` set, holding the page fields and
-the blocks as they will be after publishing. The first draft write copies the live page into it; every later draft
-write changes that copy. The public page, the page cache and the revision history stay as they are.
+the blocks as they will be after publishing, and the live page as it was when the revision started (its base). The
+first draft write copies the live page into it; every later draft write changes that copy. The public page, the page
+cache and the revision history stay as they are. A draft write that leaves the copy equal to its base removes the
+pending revision again, so `pending_revision` is `null` in that response.
 
 - `page_get` returns the live page and, under `pending_revision`, the pending page fields and blocks. `pages_list` and
   `page_get` report `has_pending_revision`.
 - Blocks keep their id in the pending revision. A block added there gets a negative id (`-1`, `-2`, …) until it is
-  published. Pass `page_id` to `block_update` and `block_remove` for such a block.
-- `page_publish` replaces the live page fields and blocks with the pending ones in one transaction: changed blocks keep
-  their id, new blocks are created, removed blocks are deleted. The pending revision is removed, a normal revision is
-  recorded and the page cache is flushed. Changes made directly on the live page after the pending revision was started
-  are overwritten; they stay in the revision history.
+  published; an id is never handed out twice. Pass `page_id` to `block_update` and `block_remove` for a block that is
+  not on the live page.
+- `page_publish` applies only what the pending revision changed compared with its base, in one transaction: changed
+  page fields and blocks are written (a block keeps its id), new blocks are created and removed blocks are deleted.
+  Fields and blocks the pending revision left alone keep their live value, so changes made directly on the live page in
+  the meantime (by the live tools or the admin) stay, unless the pending revision changed the same field or block. When
+  the pending revision changed the block order, its blocks come first in that order, followed by blocks added live in
+  the meantime. The pending revision is removed, a normal revision is recorded and the page cache is flushed. The live
+  tools say in their answer when the page has a pending revision.
+- Taking a page offline (`page_unpublish`, the admin or a planned unpublish) applies its pending revision to the page in
+  the same way, so a pending revision only exists on a published page and edits to an offline page go to the page
+  directly.
+- `pending_revision.created_by` is the user who started it and `pending_revision.edited_by` the user of the last change.
 - `revision_discard` deletes the pending revision; the live page stays as it is.
 - Images used in a pending revision count as in use, so they cannot be deleted before it is published or discarded.
 - A new slug or parent is checked when the revision is published. A taken address refuses the publication and keeps
@@ -147,9 +157,10 @@ their data fields, built from each type's `label()` and `rules()`, so custom blo
   publish. `pages_list` and `page_get` report this as `writable`.
 - When the app defines the `cms.pages.write` gate, the direct writes check it with the page: every live tool, and the
   draft tools on a draft or unpublished page. Draft writes into a pending revision skip it, because they change nothing
-  that visitors see and publishing needs `cms.pages.publish`. See [Permissions](permissions.md).
-- `page_publish`, `page_unpublish` and `revision_discard` check the same permissions as the admin's publication
-  buttons: `cms.pages.edit` and `cms.pages.publish`.
+  that visitors see; publishing them checks it. See [Permissions](permissions.md).
+- `page_publish`, `page_unpublish` and `revision_discard` need `cms.pages.edit` and `cms.pages.publish`, and check the
+  `cms.pages.write` gate with the page. So a proposal on a page that the gate protects waits until someone the gate
+  allows publishes it.
 - Writes use the same actions and validation rules as the admin (`PageRules`, `RedirectRules`, the block type's
   rules and `SafeLink`), so sanitizing, revisions, redirects and cache invalidation work the same.
 - `menu_item_save` only accepts the menu keys in `cms.menus`. It may link to any page, but the item only shows while

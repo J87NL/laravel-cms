@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace J87NL\Cms\Mcp;
 
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Arr;
 use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\MediaAsset;
 use J87NL\Cms\Models\MenuItem;
@@ -72,8 +73,10 @@ class CmsPresenter
             ->orderBy('id')
             ->get();
 
+        $pending = $this->pending->find($page);
+
         return [
-            ...$this->pageSummary($page),
+            ...$this->pageSummary($page, null, ! is_null($pending)),
             'parent_id' => $page->parent_id,
             'slug' => $page->slug,
             'menu_title' => $page->menu_title,
@@ -88,18 +91,8 @@ class CmsPresenter
             'blocks' => array_values($blocks
                 ->map(fn (Block $block): array => $this->block($block))
                 ->all()),
-            'pending_revision' => $this->pendingRevisionOf($page),
+            'pending_revision' => is_null($pending) ? null : $this->pendingRevision($pending),
         ];
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    public function pendingRevisionOf(Page $page): ?array
-    {
-        $revision = $this->pending->find($page);
-
-        return is_null($revision) ? null : $this->pendingRevision($revision);
     }
 
     /**
@@ -107,7 +100,8 @@ class CmsPresenter
      */
     public function pendingRevision(Revision $revision): array
     {
-        $blocks = $revision->snapshot['blocks'];
+        $content = PendingRevisionEditor::content($revision->snapshot);
+        $blocks = $content['blocks'];
 
         usort($blocks, fn (array $a, array $b): int => (int) ($a['sort_order'] ?? 0) <=> (int) ($b['sort_order'] ?? 0));
 
@@ -116,7 +110,8 @@ class CmsPresenter
             'created_by' => $revision->created_by,
             'created_at' => $revision->created_at?->toIso8601String(),
             'updated_at' => $revision->updated_at?->toIso8601String(),
-            'page' => $revision->snapshot['page'],
+            'edited_by' => PendingRevisionEditor::editedBy($revision->snapshot),
+            'page' => Arr::only($content['page'], Page::CONTENT_ATTRIBUTES),
             'blocks' => array_map(fn (array $block): array => $this->pendingBlock($block), $blocks),
         ];
     }
