@@ -14,6 +14,8 @@ use J87NL\Cms\Http\Controllers\PreviewController;
 use J87NL\Cms\Models\Page;
 use J87NL\Cms\Pages\HomePageLock;
 use J87NL\Cms\Pages\PageVisibility;
+use J87NL\Cms\Pages\PendingRevisionApplier;
+use J87NL\Cms\Pages\PendingRevisionEditor;
 
 test('the scheduler publishes and unpublishes pages when their moment has passed', function (): void {
     makePage([
@@ -114,7 +116,7 @@ test('refusals in both directions are saved once and not rewritten every run', f
         'slug' => 'ending',
     ]);
 
-    $refusing = new class(app(RecordRevision::class), app(HomePageLock::class), app(PageVisibility::class)) extends ChangePageStatus
+    $refusing = new class(app(RecordRevision::class), app(HomePageLock::class), app(PageVisibility::class), app(PendingRevisionEditor::class), app(PendingRevisionApplier::class)) extends ChangePageStatus
     {
         public function handle(Page $page, PageStatus $status, ?int $userId): void
         {
@@ -161,7 +163,7 @@ test('one failing page does not stop the others, fails the run and is reported o
     app(SchedulePage::class)->handle($broken, now()->addHour(), null);
     app(SchedulePage::class)->handle($fine, now()->addHour(), null);
 
-    $failing = new class(app(RecordRevision::class), app(HomePageLock::class), app(PageVisibility::class)) extends ChangePageStatus
+    $failing = new class(app(RecordRevision::class), app(HomePageLock::class), app(PageVisibility::class), app(PendingRevisionEditor::class), app(PendingRevisionApplier::class)) extends ChangePageStatus
     {
         public int $failFor = 0;
 

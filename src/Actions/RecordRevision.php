@@ -44,6 +44,7 @@ class RecordRevision
             ],
             'blocks' => array_values($blocks
                 ->map(fn (Block $block): array => [
+                    'id' => $block->id,
                     'type' => $block->type,
                     'data' => $block->data,
                     'sort_order' => $block->sort_order,
@@ -63,6 +64,7 @@ class RecordRevision
         $keep = self::keep();
 
         $oldestKeptId = Revision::query()
+            ->history()
             ->where('page_id', $page->id)
             ->orderByDesc('id')
             ->skip($keep - 1)
@@ -73,6 +75,7 @@ class RecordRevision
         }
 
         Revision::query()
+            ->history()
             ->where('page_id', $page->id)
             ->where('id', '<', $oldestKeptId)
             ->delete();

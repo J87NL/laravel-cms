@@ -114,6 +114,7 @@ counts the uses:
 
 - blocks whose type implements `ReferencesMedia` and lists the asset (disabled block types included);
 - pages that use the asset as `og_image_id`;
+- pending revisions whose blocks or page fields use the asset, see [Pending revisions](revisions.md#pending-revisions);
 - the site settings `og_image_id` and `entity_image_id`.
 
 `MediaUsage::counts()` returns `[assetId => count]` for all assets, `MediaUsage::count(MediaAsset $asset)` the count

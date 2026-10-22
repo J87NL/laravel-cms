@@ -22,7 +22,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('pages_list')]
 #[Title('List CMS pages')]
-#[Description('Lists every page of the website as a tree, with id, title, path, status (draft, published or unpublished), is_home, is_public (published and all parent pages published) and writable. Only writable pages (drafts and unpublished pages without a planned publication) can be changed with page_update and the block tools; publishing, scheduling and deleting pages only happen in the CMS admin. Use the ids with page_get.')]
+#[Description('Lists every page of the website as a tree, with id, title, path, status (draft, published or unpublished), is_home, is_public (published and all parent pages published), writable and has_pending_revision. Pages with a planned publication are not writable; other pages can be changed with the draft tools (a published page through its pending revision) or with the live tools. Scheduling and deleting pages only happen in the CMS admin. Use the ids with page_get.')]
 #[IsReadOnly]
 #[IsDestructive(false)]
 class PagesListTool extends Tool

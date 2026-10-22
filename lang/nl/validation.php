@@ -33,4 +33,7 @@ return [
     'block_order_incomplete' => 'Noem elk blok van de pagina precies één keer.',
     'menu_label_required' => 'Vul een label in voor een link naar een adres.',
     'media_too_large' => 'Dit bestand is groter dan :max kB. Upload een kleinere afbeelding.',
+    'restore_pending' => 'Een wachtende revisie kan niet worden teruggezet. Publiceer of verwerp hem.',
+    'nothing_to_publish' => 'Deze pagina is gepubliceerd en heeft geen wachtende revisie, dus er valt niets te publiceren.',
+    'publish_scheduled' => 'Voor deze pagina staat een publicatie gepland. Pas eerst de planning aan.',
 ];

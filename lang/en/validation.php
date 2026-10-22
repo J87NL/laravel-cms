@@ -33,4 +33,7 @@ return [
     'block_order_incomplete' => 'List every block of the page exactly once.',
     'menu_label_required' => 'Enter a label for a link to an address.',
     'media_too_large' => 'This file is larger than :max kB. Upload a smaller image.',
+    'restore_pending' => 'A pending revision cannot be restored. Publish or discard it instead.',
+    'nothing_to_publish' => 'This page is published and has no pending revision, so there is nothing to publish.',
+    'publish_scheduled' => 'This page has a planned publication. Change its schedule first.',
 ];

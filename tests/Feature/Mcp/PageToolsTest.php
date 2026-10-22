@@ -57,7 +57,8 @@ it('returns a page with its blocks in order', function (): void {
         ->assertStructuredContent(fn (AssertableJson $json): AssertableJson => $json
             ->where('title', 'Over ons')
             ->where('meta_description', 'Wie wij zijn')
-            ->where('writable', false)
+            ->where('writable', true)
+            ->where('pending_revision', null)
             ->where('blocks.0.id', $second->id)
             ->where('blocks.0.type', 'call_to_action')
             ->where('blocks.0.data.title', 'Bel ons')
@@ -163,14 +164,21 @@ it('refuses a canonical url longer than its column', function (): void {
     expect($page->refresh()->canonical_url)->toBe($url);
 });
 
-it('refuses to update a published page, also for a publisher', function (): void {
-    $page = makePage(['title' => 'Live']);
+it('stores a change to a published page in its pending revision and leaves the live page alone', function (): void {
+    $page = makePage(['title' => 'Live', 'meta_title' => 'Blijft']);
 
-    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit, CmsPermission::PagesPublish))
-        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'title' => 'Anders'])
-        ->assertHasErrors(['is published', 'CMS admin']);
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'title' => 'Anders', 'slug' => 'Nieuw Adres'])
+        ->assertOk()
+        ->assertSee('pending revision')
+        ->assertStructuredContent(fn (AssertableJson $json): AssertableJson => $json
+            ->where('pending_revision.page.title', 'Anders')
+            ->where('pending_revision.page.slug', 'nieuw-adres')
+            ->where('pending_revision.page.meta_title', 'Blijft')
+            ->etc());
 
-    expect($page->refresh()->title)->toBe('Live');
+    expect($page->refresh()->title)->toBe('Live')
+        ->and($page->slug)->toBe('live');
 });
 
 it('respects the page write gate of the admin when it is defined', function (): void {
@@ -245,22 +253,45 @@ it('validates block data with the rules of its type', function (): void {
         ->count())->toBe(0);
 });
 
-it('refuses block writes on a published page', function (string $tool, Closure $arguments): void {
+it('stores block writes on a published page in its pending revision only', function (string $tool, Closure $arguments, Closure $expected): void {
     $page = makePage(['title' => 'Live']);
     $first = addBlock($page, 'rich_text', ['html' => '<p>Een</p>']);
     $second = addBlock($page, 'rich_text', ['html' => '<p>Twee</p>']);
 
-    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit, CmsPermission::PagesPublish))
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
         ->tool($tool, $arguments($page, $first, $second))
-        ->assertHasErrors(['is published']);
+        ->assertOk()
+        ->assertSee('pending revision');
+
+    $pending = Revision::query()
+        ->pending()
+        ->where('page_id', $page->id)
+        ->sole();
 
     expect(pageBlockIds($page))->toBe([$first->id, $second->id])
-        ->and($first->refresh()->data['html'])->toBe('<p>Een</p>');
+        ->and($first->refresh()->data['html'])->toBe('<p>Een</p>')
+        ->and(pendingBlockSummary($pending))->toBe($expected($first, $second));
 })->with([
-    'block_add' => [BlockAddTool::class, fn (Page $page): array => ['page_id' => $page->id, 'type' => 'rich_text', 'data' => ['html' => '<p>Drie</p>']]],
-    'block_update' => [BlockUpdateTool::class, fn (Page $page, Block $first): array => ['block_id' => $first->id, 'data' => ['html' => '<p>Anders</p>']]],
-    'block_remove' => [BlockRemoveTool::class, fn (Page $page, Block $first): array => ['block_id' => $first->id]],
-    'blocks_reorder' => [BlocksReorderTool::class, fn (Page $page, Block $first, Block $second): array => ['page_id' => $page->id, 'block_ids' => [$second->id, $first->id]]],
+    'block_add' => [
+        BlockAddTool::class,
+        fn (Page $page): array => ['page_id' => $page->id, 'type' => 'rich_text', 'data' => ['html' => '<p>Drie</p>']],
+        fn (Block $first, Block $second): array => [[$first->id, '<p>Een</p>'], [$second->id, '<p>Twee</p>'], [-1, '<p>Drie</p>']],
+    ],
+    'block_update' => [
+        BlockUpdateTool::class,
+        fn (Page $page, Block $first): array => ['block_id' => $first->id, 'data' => ['html' => '<p>Anders</p>']],
+        fn (Block $first, Block $second): array => [[$first->id, '<p>Anders</p>'], [$second->id, '<p>Twee</p>']],
+    ],
+    'block_remove' => [
+        BlockRemoveTool::class,
+        fn (Page $page, Block $first): array => ['block_id' => $first->id],
+        fn (Block $first, Block $second): array => [[$second->id, '<p>Twee</p>']],
+    ],
+    'blocks_reorder' => [
+        BlocksReorderTool::class,
+        fn (Page $page, Block $first, Block $second): array => ['page_id' => $page->id, 'block_ids' => [$second->id, $first->id]],
+        fn (Block $first, Block $second): array => [[$second->id, '<p>Twee</p>'], [$first->id, '<p>Een</p>']],
+    ],
 ]);
 
 it('replaces the data of a block on a draft page', function (): void {
@@ -341,7 +372,7 @@ it('treats a page with a planned publication as read-only', function (string $to
     'blocks_reorder' => [BlocksReorderTool::class, fn (Page $page, Block $block): array => ['page_id' => $page->id, 'block_ids' => [$block->id]]],
 ]);
 
-it('marks published and scheduled pages as not writable', function (): void {
+it('marks only scheduled pages as not writable', function (): void {
     $draft = makePage(['title' => 'Concept', 'slug' => 'concept'], PageStatus::Draft);
     $scheduled = makePage(['title' => 'Gepland', 'slug' => 'gepland'], PageStatus::Draft);
     $scheduled->publish_at = now()->addDay();
@@ -353,7 +384,7 @@ it('marks published and scheduled pages as not writable', function (): void {
         ->assertStructuredContent(fn (AssertableJson $json): AssertableJson => $json
             ->where('pages.0.writable', true)
             ->where('pages.1.writable', false)
-            ->where('pages.2.writable', false)
+            ->where('pages.2.writable', true)
             ->etc());
 
     CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
@@ -370,9 +401,11 @@ it('marks published and scheduled pages as not writable', function (): void {
 });
 
 it('checks the page before it validates block data', function (): void {
-    $page = makePage(['title' => 'Live']);
+    $page = makePage(['title' => 'Gepland'], PageStatus::Draft);
+    $page->publish_at = now()->addDay();
+    $page->save();
 
     CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
         ->tool(BlockAddTool::class, ['page_id' => $page->id, 'type' => 'call_to_action', 'data' => []])
-        ->assertHasErrors(['is published']);
+        ->assertHasErrors(['is scheduled to be published']);
 });

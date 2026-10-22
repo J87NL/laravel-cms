@@ -16,6 +16,8 @@ use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\MediaAsset;
 use J87NL\Cms\Models\Page;
 use J87NL\Cms\Models\Redirect;
+use J87NL\Cms\Models\Revision;
+use J87NL\Cms\Pages\PendingRevisionEditor;
 use J87NL\Cms\Tests\TestCase;
 use Orchestra\Testbench\Factories\UserFactory;
 
@@ -108,4 +110,28 @@ function pageBlockIds(Page $page): array
         ->orderBy('id')
         ->pluck('id')
         ->all();
+}
+
+function pendingPage(string $title = 'Live'): Page
+{
+    $page = makePage(['title' => $title]);
+
+    app(PendingRevisionEditor::class)->updatePage($page, ['title' => sprintf('%s concept', $title)], null);
+
+    return $page;
+}
+
+/**
+ * @return list<array{int, mixed}>
+ */
+function pendingBlockSummary(Revision $revision): array
+{
+    $blocks = $revision->snapshot['blocks'];
+
+    usort($blocks, fn (array $a, array $b): int => $a['sort_order'] <=> $b['sort_order']);
+
+    return array_map(fn (array $block): array => [
+        $block['id'],
+        $block['data']['html'] ?? null,
+    ], $blocks);
 }

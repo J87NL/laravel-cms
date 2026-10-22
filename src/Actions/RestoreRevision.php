@@ -6,6 +6,7 @@ namespace J87NL\Cms\Actions;
 
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\Page;
 use J87NL\Cms\Models\Revision;
@@ -19,6 +20,12 @@ class RestoreRevision
 
     public function handle(Revision $revision, ?int $userId): Page
     {
+        if ($revision->is_pending) {
+            throw ValidationException::withMessages([
+                'revision' => __('cms::validation.restore_pending'),
+            ]);
+        }
+
         return DB::transaction(function () use ($revision, $userId): Page {
             $page = $revision->page;
             $snapshot = $revision->snapshot;
@@ -51,7 +58,7 @@ class RestoreRevision
      * @param  array<string, mixed>  $snapshot
      * @return array<string, mixed>
      */
-    private function pageAttributes(Page $page, array $snapshot): array
+    public function pageAttributes(Page $page, array $snapshot): array
     {
         $attributes = Arr::only($snapshot, Page::CONTENT_ATTRIBUTES);
 

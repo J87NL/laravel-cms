@@ -4,17 +4,34 @@ All notable changes to this package are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-22
+
 ### Added
 
 - The `link_tiles` block type (`LinkTilesBlock`): an optional heading and a reorderable list of tiles with a name, an optional image and an optional `https://` link, rendered as image or name. The `rel` value is chosen per block: `noopener`, `me noopener` or `sponsored noopener`. Images on tiles count as in use. It replaces app blocks such as sponsors and social links.
 - `<x-cms::image>` takes an optional `alt` attribute that replaces the asset's alt text.
 - `ReplaceMediaFile` gives a media asset a new file in place. The asset keeps its id, alt text, caption and focal point, so every block that uses it shows the new file. The file gets the same checks as an upload, the conversions are made again, the old files are deleted after the transaction commits, and the page cache is flushed.
 - `J87NL\Cms\Media\UploadedImage` holds the upload size check and file naming that `UploadMedia` and `ReplaceMediaFile` share.
+- Pending revisions: a published page can hold one pending revision (`cms_revisions.is_pending`) with changes that are not live yet. `Page::pendingRevision()`, the `Revision` scopes `history()` and `pending()`, and `J87NL\Cms\Pages\PendingRevisionEditor` to change it.
+- `PublishPage` applies what the pending revision of a page changed compared with the live page it started from (`PendingRevisionApplier`, blocks matched by id), and publishes a page that is not published yet. `DiscardPendingRevision` throws a pending revision away.
+- `ChangePageStatus::applyLocked()` changes the status of a page whose row the caller already locked.
+- Taking a page offline applies its pending revision to the page; a slug or parent change that cannot be applied is skipped with a logged warning, so it never blocks the status change.
+- MCP tools `page_update_live`, `block_add_live`, `block_update_live`, `block_remove_live` and `blocks_reorder_live` change a page directly, also when it is published. They need `cms.pages.publish` and are marked destructive.
+- MCP tools `page_publish`, `page_unpublish` and `revision_discard`, marked destructive. They need `cms.pages.edit` and `cms.pages.publish` and check the `cms.pages.write` gate.
+- `pages_list` and `page_get` report `has_pending_revision`; `page_get` returns `pending_revision`.
+- A block added on the live page after a pending revision started is taken into that pending revision and its base unchanged (`PendingRevisionEditor::withLiveBlocks()`), so the draft tools can change or remove it instead of answering that it was not found.
 
 ### Changed
 
 - The `UploadMedia` constructor takes an `UploadedImage` next to the `ImageCleaner`. Code that builds it with `new` must pass one; resolving it from the container keeps working.
 - `DeleteMedia` checks the usage and deletes the rows inside a transaction that locks the asset row, and removes the files only after the commit. A rolled back delete keeps the files. The constructor takes the media library `Filesystem`.
+- The MCP draft tools (`page_update`, `block_add`, `block_update`, `block_remove`, `blocks_reorder`) no longer refuse a published page: they store the change in its pending revision and leave the live page, the revision history and the page cache alone. They skip the `cms.pages.write` gate for those writes. `block_update` and `block_remove` take an optional `page_id` for blocks that only exist in the pending revision.
+- `writable` in `pages_list` and `page_get` is only `false` for a page with a planned publication.
+- Revision snapshots store the block `id`.
+- `ChangePageStatus` takes `PendingRevisionEditor` and `PendingRevisionApplier` in its constructor; a subclass that calls the parent constructor must pass them.
+- `Page::revisions()` and revision pruning leave out the pending revision, and `RestoreRevision` refuses it.
+- `MediaUsage` counts images used in pending revisions, so they cannot be deleted.
+- The package now ships 22 MCP tools; set `$defaultPaginationLength = 50` on the app's MCP server when the client does not page through `tools/list`.
 
 ## [0.2.2] - 2026-10-21
 
@@ -83,6 +100,7 @@ First release, extracted from the j87.nl app.
 - Require `symfony/html-sanitizer` `^7.4.13|^8.0.13` for CVE-2026-45064, CVE-2026-45066, CVE-2026-45753, CVE-2026-48760 and CVE-2026-48761.
 
 [Unreleased]: https://github.com/J87NL/laravel-cms/compare/v0.2.0...HEAD
+[0.3.0]: https://github.com/J87NL/laravel-cms/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/J87NL/laravel-cms/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/J87NL/laravel-cms/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/J87NL/laravel-cms/compare/v0.1.0...v0.2.0

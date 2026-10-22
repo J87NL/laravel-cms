@@ -5,33 +5,39 @@ declare(strict_types=1);
 namespace J87NL\Cms\Mcp;
 
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Arr;
 use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\MediaAsset;
 use J87NL\Cms\Models\MenuItem;
 use J87NL\Cms\Models\Page;
 use J87NL\Cms\Models\Redirect;
+use J87NL\Cms\Models\Revision;
 use J87NL\Cms\Pages\PageVisibility;
+use J87NL\Cms\Pages\PendingRevisionEditor;
 
 class CmsPresenter
 {
     public function __construct(
         private readonly PageVisibility $visibility,
+        private readonly PendingRevisionEditor $pending,
     ) {}
 
     /**
      * @param  Collection<int, Page>  $pages
+     * @param  list<int>|null  $pendingPageIds
      * @return list<array<string, mixed>>
      */
-    public function pageTree(Collection $pages, ?int $parentId = null, bool $ancestorsPublic = true): array
+    public function pageTree(Collection $pages, ?int $parentId = null, bool $ancestorsPublic = true, ?array $pendingPageIds = null): array
     {
+        $pendingPageIds ??= $this->pendingPageIds();
         $nodes = [];
 
         foreach ($pages->where('parent_id', $parentId) as $page) {
             $isPublic = $ancestorsPublic && $page->isPublished();
 
             $nodes[] = [
-                ...$this->pageSummary($page, $isPublic),
-                'children' => $this->pageTree($pages, $page->id, $isPublic),
+                ...$this->pageSummary($page, $isPublic, in_array($page->id, $pendingPageIds, true)),
+                'children' => $this->pageTree($pages, $page->id, $isPublic, $pendingPageIds),
             ];
         }
 
@@ -41,7 +47,7 @@ class CmsPresenter
     /**
      * @return array<string, mixed>
      */
-    public function pageSummary(Page $page, ?bool $isPublic = null): array
+    public function pageSummary(Page $page, ?bool $isPublic = null, ?bool $hasPendingRevision = null): array
     {
         return [
             'id' => $page->id,
@@ -51,7 +57,8 @@ class CmsPresenter
             'status' => $page->status->value,
             'is_home' => $page->is_home,
             'is_public' => $isPublic ?? $this->visibility->isPublic($page),
-            'writable' => ! $page->isPublished() && is_null($page->publish_at),
+            'writable' => is_null($page->publish_at),
+            'has_pending_revision' => $hasPendingRevision ?? ! is_null($this->pending->find($page)),
         ];
     }
 
@@ -66,8 +73,11 @@ class CmsPresenter
             ->orderBy('id')
             ->get();
 
+        $pending = $this->pending->find($page);
+        $pending?->setRelation('page', $page);
+
         return [
-            ...$this->pageSummary($page),
+            ...$this->pageSummary($page, null, ! is_null($pending)),
             'parent_id' => $page->parent_id,
             'slug' => $page->slug,
             'menu_title' => $page->menu_title,
@@ -82,7 +92,58 @@ class CmsPresenter
             'blocks' => array_values($blocks
                 ->map(fn (Block $block): array => $this->block($block))
                 ->all()),
+            'pending_revision' => is_null($pending) ? null : $this->pendingRevision($pending),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function pendingRevision(Revision $revision): array
+    {
+        $snapshot = is_null($revision->page)
+            ? $revision->snapshot
+            : $this->pending->withLiveBlocks($revision->page, $revision->snapshot);
+        $content = PendingRevisionEditor::content($snapshot);
+        $blocks = $content['blocks'];
+
+        usort($blocks, fn (array $a, array $b): int => (int) ($a['sort_order'] ?? 0) <=> (int) ($b['sort_order'] ?? 0));
+
+        return [
+            'id' => $revision->id,
+            'created_by' => $revision->created_by,
+            'created_at' => $revision->created_at?->toIso8601String(),
+            'updated_at' => $revision->updated_at?->toIso8601String(),
+            'edited_by' => PendingRevisionEditor::editedBy($revision->snapshot),
+            'page' => Arr::only($content['page'], Page::CONTENT_ATTRIBUTES),
+            'blocks' => array_map(fn (array $block): array => $this->pendingBlock($block), $blocks),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $block
+     * @return array<string, mixed>
+     */
+    public function pendingBlock(array $block): array
+    {
+        return [
+            'id' => (int) ($block['id'] ?? 0),
+            'type' => (string) ($block['type'] ?? ''),
+            'position' => (int) ($block['sort_order'] ?? 0),
+            'is_visible' => (bool) ($block['is_visible'] ?? true),
+            'data' => is_array($block['data'] ?? null) ? $block['data'] : [],
+        ];
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function pendingPageIds(): array
+    {
+        return array_values(array_map('intval', Revision::query()
+            ->pending()
+            ->pluck('page_id')
+            ->all()));
     }
 
     /**

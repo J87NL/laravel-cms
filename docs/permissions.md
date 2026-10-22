@@ -17,8 +17,9 @@ The package names six permissions in the `J87NL\Cms\CmsPermission` enum:
 ## Where the package checks them
 
 The package itself only checks permissions in the [MCP tools](mcp-tools.md): `cms.pages.edit`, `cms.menus`,
-`cms.media` and `cms.redirects`, each for its own tools. `cms.pages.publish` and `cms.settings` are never checked in
-this package; they exist for the admin. The public routes and the [actions](actions.md) check no permissions.
+`cms.media` and `cms.redirects`, each for its own tools, and `cms.pages.publish` (on top of `cms.pages.edit`) for the
+live tools, `page_publish`, `page_unpublish` and `revision_discard`. `cms.settings` is never checked in this package; it
+exists for the admin. The public routes and the [actions](actions.md) check no permissions.
 
 The admin of `j87nl/laravel-vue-cms` checks all six on its routes. Which permission opens which screen is listed in
 its [permissions documentation](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/permissions.md).
@@ -73,9 +74,12 @@ The rule in this example (only admins may change the home page) stands for your 
 and a published page only with `cms.pages.publish` as well. See
 [Changing a published page](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/permissions.md#changing-a-published-page).
 
-For the MCP tools this adds nothing. They only change pages that are not published and not scheduled, also for a user
-who may publish (see [MCP tools](mcp-tools.md#rules-the-tools-follow)). On those pages the admin's rule only asks for
-`cms.pages.edit`, which the tools check anyway.
+For the MCP tools the admin's rule only matters for direct writes: a live tool on a published page needs
+`cms.pages.publish`, which the live tools check anyway. A draft tool on a published page writes to the page's pending
+revision and does not check the gate, so an editor with only `cms.pages.edit` can propose changes that someone with
+`cms.pages.publish` publishes (see [MCP tools](mcp-tools.md#draft-and-live-mode)). `page_publish`, `page_unpublish`
+and `revision_discard` check the gate, so your own rules (such as the home page example above) also decide who may put
+a proposal live.
 
 Your own `Gate::define('cms.pages.write', ...)` replaces the admin's gate, because app service providers boot after
 package providers. Admin users would then lose the published-page rule without any warning. To add your own rule,

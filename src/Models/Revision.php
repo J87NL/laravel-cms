@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace J87NL\Cms\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -12,6 +13,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $page_id
  * @property array{page: array<string, mixed>, blocks: list<array<string, mixed>>} $snapshot
+ * @property bool $is_pending
  * @property int|null $created_by
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -27,7 +29,15 @@ class Revision extends Model
      */
     protected $fillable = [
         'snapshot',
+        'is_pending',
         'created_by',
+    ];
+
+    /**
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'is_pending' => false,
     ];
 
     /**
@@ -37,9 +47,26 @@ class Revision extends Model
     {
         return [
             'snapshot' => 'array',
+            'is_pending' => 'boolean',
             'created_by' => 'integer',
             'page_id' => 'integer',
         ];
+    }
+
+    /**
+     * @param  Builder<Revision>  $query
+     */
+    public function scopeHistory(Builder $query): void
+    {
+        $query->where('is_pending', false);
+    }
+
+    /**
+     * @param  Builder<Revision>  $query
+     */
+    public function scopePending(Builder $query): void
+    {
+        $query->where('is_pending', true);
     }
 
     /**

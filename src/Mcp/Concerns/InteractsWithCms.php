@@ -16,11 +16,15 @@ use Illuminate\Support\Facades\Validator;
 use J87NL\Cms\Blocks\BlockRegistry;
 use J87NL\Cms\Blocks\BlockType;
 use J87NL\Cms\CmsPermission;
+use J87NL\Cms\Enums\EditMode;
 use J87NL\Cms\Mcp\BlockTypeSummary;
+use J87NL\Cms\Mcp\CmsPresenter;
 use J87NL\Cms\Mcp\CmsTools;
 use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\Menu;
 use J87NL\Cms\Models\Page;
+use J87NL\Cms\Models\Revision;
+use J87NL\Cms\Pages\PendingRevisionEditor;
 use J87NL\Cms\Validation\PageRules;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -96,19 +100,121 @@ trait InteractsWithCms
 
     protected function pageWriteRefusal(Authenticatable $user, Page $page): ?Response
     {
-        if ($page->isPublished()) {
-            return Response::error(sprintf('Page %d "%s" is published, so these tools cannot change it. Make this change in the CMS admin, or use page_draft_create for a new draft page.', $page->id, $page->title));
+        if (! $this->writesPending($page) && $this->gateRefuses($user, $page)) {
+            return $this->gateRefusal($page);
         }
 
-        if (! is_null($page->publish_at)) {
-            return Response::error(sprintf('Page %d "%s" is scheduled to be published on %s, so these tools cannot change it. Change the page or its schedule in the CMS admin.', $page->id, $page->title, $page->publish_at->toIso8601String()));
+        return $this->scheduledRefusal($page);
+    }
+
+    protected function publicationRefusal(Authenticatable $user, Page $page): ?Response
+    {
+        if ($this->gateRefuses($user, $page)) {
+            return $this->gateRefusal($page);
         }
 
-        if (Gate::has(CmsTools::PAGE_WRITE_ABILITY) && ! Gate::forUser($user)->allows(CmsTools::PAGE_WRITE_ABILITY, $page)) {
-            return Response::error(sprintf('You may not change page %d "%s". Ask an administrator of this site for access, or make the change in the CMS admin.', $page->id, $page->title));
+        return $this->scheduledRefusal($page);
+    }
+
+    protected function gateRefuses(Authenticatable $user, Page $page): bool
+    {
+        return Gate::has(CmsTools::PAGE_WRITE_ABILITY) && ! Gate::forUser($user)->allows(CmsTools::PAGE_WRITE_ABILITY, $page);
+    }
+
+    protected function gateRefusal(Page $page): Response
+    {
+        return Response::error(sprintf('You may not change page %d "%s". Ask an administrator of this site for access, or make the change in the CMS admin.', $page->id, $page->title));
+    }
+
+    protected function scheduledRefusal(Page $page): ?Response
+    {
+        if (is_null($page->publish_at)) {
+            return null;
         }
 
-        return null;
+        return Response::error(sprintf('Page %d "%s" is scheduled to be published on %s, so these tools cannot change it. Change the page or its schedule in the CMS admin.', $page->id, $page->title, $page->publish_at->toIso8601String()));
+    }
+
+    protected function liveMessage(Page $page, string $message): string
+    {
+        if ($this->mode() !== EditMode::Live || is_null($this->pendingEditor()->find($page))) {
+            return $message;
+        }
+
+        return sprintf('%s The page also has a pending revision; publishing it keeps this change, unless the pending revision changes the same page field or block.', $message);
+    }
+
+    protected function mode(): EditMode
+    {
+        return EditMode::Draft;
+    }
+
+    protected function writesPending(Page $page): bool
+    {
+        return $this->mode() === EditMode::Draft && $page->isPublished();
+    }
+
+    protected function authorizePageWrite(Request $request): Authenticatable|Response
+    {
+        $user = $this->authorizeWrite($request, CmsPermission::PagesEdit);
+
+        if ($user instanceof Response || $this->mode() === EditMode::Draft) {
+            return $user;
+        }
+
+        return $this->authorizeWrite($request, CmsPermission::PagesPublish);
+    }
+
+    protected function authorizePublication(Request $request): Authenticatable|Response
+    {
+        $user = $this->authorizeWrite($request, CmsPermission::PagesEdit);
+
+        if ($user instanceof Response) {
+            return $user;
+        }
+
+        return $this->authorizeWrite($request, CmsPermission::PagesPublish);
+    }
+
+    protected function pendingEditor(): PendingRevisionEditor
+    {
+        return app(PendingRevisionEditor::class);
+    }
+
+    /**
+     * @param  array<string, mixed>  $extra
+     */
+    protected function pendingResponse(?Revision $revision, string $message, array $extra = []): ResponseFactory
+    {
+        if (is_null($revision)) {
+            return Response::structured([
+                'message' => 'The pending revision now matches the live page, so there is no pending revision any more. The live page is unchanged.',
+                ...$extra,
+                'pending_revision' => null,
+            ]);
+        }
+
+        return Response::structured([
+            'message' => sprintf('%s The live page is unchanged until someone publishes the pending revision with page_publish or in the CMS admin.', $message),
+            ...$extra,
+            'pending_revision' => app(CmsPresenter::class)->pendingRevision($revision),
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     */
+    protected function blockPageId(array $input): ?int
+    {
+        if (isset($input['page_id'])) {
+            return (int) $input['page_id'];
+        }
+
+        $pageId = Block::query()
+            ->whereKey((int) $input['block_id'])
+            ->value('page_id');
+
+        return is_numeric($pageId) ? (int) $pageId : null;
     }
 
     protected function pageNotFound(int $pageId): Response

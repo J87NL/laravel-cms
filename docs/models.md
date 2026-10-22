@@ -24,7 +24,8 @@ revisions. Saving or deleting a `Page`, `Block`, `Menu`, `MenuItem`, `SiteSettin
 |---|---|
 | `parent()`, `children()` | The tree. Children are ordered by `sort_order` |
 | `blocks()` | The blocks, ordered by `sort_order` |
-| `revisions()` | The revisions, newest first |
+| `revisions()` | The revisions, newest first, without the pending revision |
+| `pendingRevision()` | The pending revision with the changes that are not live yet, or none |
 | `scopePublished()` | `Page::query()->published()`: pages with the status `published` (ancestors not checked) |
 | `isPublished()` | Whether the status is `published` |
 | `url()` | `/` for the home page, `/{path}` otherwise |
