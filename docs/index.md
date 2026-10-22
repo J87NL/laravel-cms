@@ -36,7 +36,7 @@ These docs describe the core. For the admin screens, read the
 ## How it works
 
 1. Install the package, run the migrations and point `cms.layout` at your Blade layout.
-2. Editors create pages and add blocks to them (rich text, images, a gallery, a contact form and more).
+2. Editors create pages and add blocks to them (rich text, images, a gallery, link tiles, a contact form and more).
 3. The package registers a catch-all route. A request for `/about-us` renders the published page with that path
    inside your layout, with SEO tags and JSON-LD in the `head` section.
 4. Anonymous responses are cached as full HTML and dropped again on every content change.

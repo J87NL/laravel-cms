@@ -12,6 +12,9 @@ return [
         'text' => 'Deze pagina bestaat niet (meer).',
         'home' => 'Naar de startpagina',
     ],
+    'link_tiles' => [
+        'label' => 'Links',
+    ],
     'llms' => [
         'pages' => 'Pagina\'s',
     ],

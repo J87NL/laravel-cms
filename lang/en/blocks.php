@@ -100,4 +100,28 @@ return [
         'mail_subject' => 'Message via :site: :page',
         'mail_intro' => 'Message from the contact form on :url',
     ],
+    'link_tiles' => [
+        'label' => 'Link tiles',
+        'add_tile' => 'Add tile',
+        'tile' => 'Tile',
+        'link_label' => ':name (opens in a new tab)',
+        'fields' => [
+            'title' => 'Heading',
+            'rel' => 'Kind of links',
+            'tiles' => 'Tiles',
+            'name' => 'Name',
+            'media_id' => 'Image',
+            'url' => 'Link',
+        ],
+        'rels' => [
+            'plain' => 'Regular links',
+            'me' => 'My own profiles (rel="me")',
+            'sponsored' => 'Sponsors and paid links (rel="sponsored")',
+        ],
+        'help' => [
+            'rel' => 'Tells search engines how these links relate to your site.',
+            'name' => 'Shown when the tile has no image, and read out by screen readers.',
+            'url' => 'Optional. Only a full https address, for example https://www.example.com.',
+        ],
+    ],
 ];

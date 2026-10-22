@@ -100,4 +100,28 @@ return [
         'mail_subject' => 'Bericht via :site: :page',
         'mail_intro' => 'Bericht via het contactformulier op :url',
     ],
+    'link_tiles' => [
+        'label' => 'Linktegels',
+        'add_tile' => 'Tegel toevoegen',
+        'tile' => 'Tegel',
+        'link_label' => ':name (opent in een nieuw tabblad)',
+        'fields' => [
+            'title' => 'Kop',
+            'rel' => 'Soort links',
+            'tiles' => 'Tegels',
+            'name' => 'Naam',
+            'media_id' => 'Afbeelding',
+            'url' => 'Link',
+        ],
+        'rels' => [
+            'plain' => 'Gewone links',
+            'me' => 'Mijn eigen profielen (rel="me")',
+            'sponsored' => 'Sponsors en betaalde links (rel="sponsored")',
+        ],
+        'help' => [
+            'rel' => 'Vertelt zoekmachines hoe deze links bij je site horen.',
+            'name' => 'Zichtbaar als de tegel geen afbeelding heeft, en voorgelezen door schermlezers.',
+            'url' => 'Optioneel. Alleen een volledig https-adres, bijvoorbeeld https://www.voorbeeld.nl.',
+        ],
+    ],
 ];
