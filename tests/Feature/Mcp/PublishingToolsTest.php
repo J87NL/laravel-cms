@@ -294,7 +294,7 @@ it('summarises in page_get what publishing the pending revision would change', f
         ->assertOk();
 
     CmsTestServer::actingAs($editor)
-        ->tool(BlockUpdateTool::class, ['block_id' => $first->id, 'data' => ['html' => '<p>Een nieuw</p>']])
+        ->tool(BlockUpdateTool::class, ['block_id' => $first->id, 'data' => ['html' => '<p><a href="https://evil.example">Een</a></p>']])
         ->assertOk();
 
     CmsTestServer::actingAs($editor)
@@ -323,6 +323,14 @@ it('summarises in page_get what publishing the pending revision would change', f
                         'change' => 'changed',
                         'moved' => false,
                         'changed_keys' => ['html'],
+                        'markup_only_keys' => ['html'],
+                        'link_changes' => [
+                            [
+                                'key' => 'html',
+                                'live' => [],
+                                'pending' => ['https://evil.example'],
+                            ],
+                        ],
                         'visibility_changed' => false,
                     ],
                     [
@@ -331,6 +339,8 @@ it('summarises in page_get what publishing the pending revision would change', f
                         'change' => 'removed',
                         'moved' => false,
                         'changed_keys' => [],
+                        'markup_only_keys' => [],
+                        'link_changes' => [],
                         'visibility_changed' => false,
                     ],
                     [
@@ -339,6 +349,8 @@ it('summarises in page_get what publishing the pending revision would change', f
                         'change' => 'added',
                         'moved' => false,
                         'changed_keys' => [],
+                        'markup_only_keys' => [],
+                        'link_changes' => [],
                         'visibility_changed' => false,
                     ],
                 ],

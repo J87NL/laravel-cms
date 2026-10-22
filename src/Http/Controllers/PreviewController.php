@@ -9,6 +9,7 @@ use Illuminate\Http\Response;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\URL;
 use J87NL\Cms\Models\Page;
+use J87NL\Cms\Models\Revision;
 use J87NL\Cms\Pages\PendingRevisionApplier;
 use J87NL\Cms\Pages\PendingRevisionEditor;
 use J87NL\Cms\Rendering\PageResponse;
@@ -27,18 +28,16 @@ class PreviewController extends Controller
         return $pageResponse->make($preview, preview: true);
     }
 
-    public function pending(string $page, PageResponse $pageResponse, PendingRevisionEditor $pending, PendingRevisionApplier $applier): Response
+    public function pending(string $page, string $revision, PageResponse $pageResponse, PendingRevisionEditor $pending, PendingRevisionApplier $applier): Response
     {
         $preview = Page::query()
             ->findOrFail((int) $page);
 
-        $revision = $pending->find($preview);
+        $current = $pending->find($preview);
 
-        if (is_null($revision)) {
-            return $pageResponse->make($preview, preview: true);
-        }
+        abort_if(is_null($current) || $current->id !== (int) $revision, 404);
 
-        return $pageResponse->make($applier->plan($preview, $revision)->page($preview), preview: true);
+        return $pageResponse->make($applier->plan($preview, $current)->page($preview), preview: true);
     }
 
     public static function url(Page $page): string
@@ -48,10 +47,11 @@ class PreviewController extends Controller
         ]);
     }
 
-    public static function pendingUrl(Page $page): string
+    public static function pendingUrl(Page $page, Revision $revision): string
     {
         return URL::temporarySignedRoute(self::PENDING_ROUTE, self::expiresAt(), [
             'page' => $page->id,
+            'revision' => $revision->id,
         ]);
     }
 

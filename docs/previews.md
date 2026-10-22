@@ -34,16 +34,23 @@ shows the page as it would look after publishing it:
 ```php
 use J87NL\Cms\Http\Controllers\PreviewController;
 
-$url = PreviewController::pendingUrl($page);
+$url = PreviewController::pendingUrl($page, $page->pendingRevision);
 ```
 
-`PreviewController::pendingUrl(Page $page): string` returns a temporary signed URL for the route `cms.preview.pending`
-(`GET /cms/preview/{page}/pending`), valid for `cms.preview.minutes` minutes like the draft preview. The response has
-the same `noindex` headers and meta tag and is never cached.
+`PreviewController::pendingUrl(Page $page, Revision $revision): string` returns a temporary signed URL for the route
+`cms.preview.pending` (`GET /cms/preview/{page}/pending/{revision}`), valid for `cms.preview.minutes` minutes like the
+draft preview. The response has the same `noindex` headers and meta tag and is never cached.
+
+Unlike the draft preview, the link alone is not enough:
+
+- the route runs `cms.preview.pending_middleware` (default `web` and `auth`), then `can:cms.pages.edit`, then
+  `signed`. A guest is sent to the login page (or gets a 401 for JSON), a user without `cms.pages.edit` gets a 403;
+- the revision id is part of the signature. When it is no longer the page's pending revision (published, discarded,
+  or replaced by a newer one) the link answers 404, so it never shows changes made after it was handed out.
 
 The preview applies the pending revision in memory, in the same way as publishing does
 (`PendingRevisionApplier::plan()`), so changes made on the live page that the pending revision left alone are shown
-too. Nothing is written to the database. A page without a pending revision renders as it is. Blocks added in the
+too. Nothing is written to the database. Blocks added in the
 pending revision do not exist yet, so a contact form among them cannot be sent from the preview.
 
 The block renderer and the SEO tags read the blocks through `Page::visibleBlocks()`, which uses the page's loaded

@@ -107,6 +107,8 @@ test('the diff shows an added block at its new position with its content', funct
             'before' => null,
             'after' => 'Kom langs',
             'words' => null,
+            'markup_changed' => false,
+            'links' => null,
         ])
         ->and($diff['summary']['added'])->toBe(1)
         ->and($diff['summary']['reordered'])->toBeFalse();
@@ -134,6 +136,8 @@ test('the diff keeps a removed block at the place it had on the live page', func
                 'before' => 'Weg ermee',
                 'after' => null,
                 'words' => null,
+                'markup_changed' => false,
+                'links' => null,
             ],
         ])
         ->and($diff['summary']['removed'])->toBe(1);
@@ -178,6 +182,8 @@ test('the diff shows a word level diff of the plain text of changed rich text', 
                     ['type' => 'removed', 'text' => 'open.'],
                     ['type' => 'added', 'text' => 'open vanaf negen uur.'],
                 ],
+                'markup_changed' => false,
+                'links' => null,
             ],
         ])
         ->and($diff['summary']['changed'])->toBe(1);
@@ -210,6 +216,8 @@ test('the diff names the changed values inside nested block data', function (): 
                 ['type' => 'removed', 'text' => 'Slager'],
                 ['type' => 'added', 'text' => 'Groenteboer'],
             ],
+            'markup_changed' => false,
+            'links' => null,
         ],
     ]);
 });
@@ -232,6 +240,93 @@ test('the diff marks only the blocks that moved', function (): void {
         ->and($diff['blocks'][0]['position'])->toBe(['before' => 3, 'after' => 1])
         ->and($diff['summary']['moved'])->toBe(1)
         ->and($diff['summary']['reordered'])->toBeTrue();
+});
+
+test('the diff flags a rich text change that only touches the markup and lists changed link targets', function (): void {
+    $page = makePage(['title' => 'Live']);
+    $link = addBlock($page, 'rich_text', ['html' => '<p>Lees <a href="https://example.com/info">meer</a></p>']);
+    $bold = addBlock($page, 'rich_text', ['html' => '<p>Open op zaterdag</p>']);
+    $type = app(BlockRegistry::class)->find('rich_text');
+
+    pendingEditor()->updateBlock($page, $link->id, $type, ['html' => '<p>Lees <a href="https://evil.example/info">meer</a></p>'], null);
+    pendingEditor()->updateBlock($page, $bold->id, $type, ['html' => '<p>Open op <strong>zaterdag</strong></p>'], null);
+
+    $diff = pendingDiff($page);
+
+    expect(diffBlockStatuses($diff))->toBe([
+        [$link->id, 'changed', false],
+        [$bold->id, 'changed', false],
+    ])
+        ->and($diff['blocks'][0]['changes'])->toBe([
+            [
+                'key' => 'html',
+                'before' => 'Lees meer',
+                'after' => 'Lees meer',
+                'words' => [
+                    ['type' => 'equal', 'text' => 'Lees meer'],
+                ],
+                'markup_changed' => true,
+                'links' => [
+                    'before' => ['https://example.com/info'],
+                    'after' => ['https://evil.example/info'],
+                ],
+            ],
+        ])
+        ->and($diff['blocks'][1]['changes'][0]['markup_changed'])->toBeTrue()
+        ->and($diff['blocks'][1]['changes'][0]['links'])->toBeNull();
+});
+
+test('the diff shows a block that changed and moved', function (): void {
+    $page = makePage(['title' => 'Live']);
+    $first = addBlock($page, 'rich_text', ['html' => '<p>Een</p>']);
+    $second = addBlock($page, 'rich_text', ['html' => '<p>Twee</p>']);
+    $third = addBlock($page, 'rich_text', ['html' => '<p>Drie</p>']);
+
+    pendingEditor()->updateBlock($page, $third->id, app(BlockRegistry::class)->find('rich_text'), ['html' => '<p>Drie nieuw</p>'], null);
+    pendingEditor()->reorderBlocks($page, [$third->id, $first->id, $second->id], null);
+
+    $diff = pendingDiff($page);
+
+    expect(diffBlockStatuses($diff))->toBe([
+        [$third->id, 'changed', true],
+        [$first->id, 'unchanged', false],
+        [$second->id, 'unchanged', false],
+    ])
+        ->and($diff['blocks'][0]['position'])->toBe(['before' => 3, 'after' => 1])
+        ->and(array_column($diff['blocks'][0]['changes'], 'after'))->toBe(['Drie nieuw'])
+        ->and($diff['summary']['changed'])->toBe(1)
+        ->and($diff['summary']['moved'])->toBe(1);
+});
+
+test('the diff keeps a removed block next to its stable neighbour when the block before it moved', function (): void {
+    $page = makePage(['title' => 'Live']);
+    $first = addBlock($page, 'rich_text', ['html' => '<p>A</p>']);
+    $removed = addBlock($page, 'rich_text', ['html' => '<p>B</p>']);
+    $third = addBlock($page, 'rich_text', ['html' => '<p>C</p>']);
+    $fourth = addBlock($page, 'rich_text', ['html' => '<p>D</p>']);
+
+    pendingEditor()->removeBlock($page, $removed->id, null);
+    pendingEditor()->reorderBlocks($page, [$third->id, $fourth->id, $first->id], null);
+
+    expect(diffBlockStatuses(pendingDiff($page)))->toBe([
+        [$removed->id, 'removed', false],
+        [$third->id, 'unchanged', false],
+        [$fourth->id, 'unchanged', false],
+        [$first->id, 'unchanged', true],
+    ]);
+});
+
+test('the diff can leave out the word level diff', function (): void {
+    $page = makePage(['title' => 'Live']);
+    $block = addBlock($page, 'rich_text', ['html' => '<p>Oud</p>']);
+
+    pendingEditor()->updateBlock($page, $block->id, app(BlockRegistry::class)->find('rich_text'), ['html' => '<p>Nieuw</p>'], null);
+
+    $diff = app(DiffPendingRevision::class)->handle($page, $page->pendingRevision()->firstOrFail(), withWords: false);
+
+    expect($diff['blocks'][0]['changes'][0]['before'])->toBe('Oud')
+        ->and($diff['blocks'][0]['changes'][0]['after'])->toBe('Nieuw')
+        ->and($diff['blocks'][0]['changes'][0]['words'])->toBeNull();
 });
 
 test('the diff shows a change of visibility', function (): void {

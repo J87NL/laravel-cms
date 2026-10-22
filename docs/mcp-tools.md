@@ -100,7 +100,10 @@ pending revision again, so `pending_revision` is `null` in that response.
   publishing would change compared with the live page, from
   [`DiffPendingRevision`](revisions.md#comparing-a-pending-revision-with-the-live-page): `fields` (each with `field`,
   `live` and `pending`), `blocks` (only the blocks that change or move, each with `id`, `type`, `change` as `added`,
-  `removed` or `changed`, `moved`, `changed_keys` and `visibility_changed`) and `reordered`.
+  `removed` or `changed`, `moved`, `changed_keys`, `markup_only_keys`, `link_changes` and `visibility_changed`) and
+  `reordered`. `markup_only_keys` are the changed rich text values whose text stays the same, so only the markup
+  (formatting, a link or an image) changes; `link_changes` lists, per value, the `href` and `src` targets on the `live`
+  and `pending` side when they differ. Check both: a changed link target does not show in the text.
 - Blocks keep their id in the pending revision. A block added there gets a negative id (`-1`, `-2`, …) until it is
   published; an id is never handed out twice. Pass `page_id` to `block_update` and `block_remove` for a block that is
   not on the live page.

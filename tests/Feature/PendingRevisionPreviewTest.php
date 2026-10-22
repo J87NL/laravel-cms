@@ -2,9 +2,23 @@
 
 declare(strict_types=1);
 
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
+use J87NL\Cms\Actions\DiscardPendingRevision;
 use J87NL\Cms\Blocks\BlockRegistry;
+use J87NL\Cms\CmsPermission;
 use J87NL\Cms\Http\Controllers\PreviewController;
+use J87NL\Cms\Models\Page;
 use J87NL\Cms\Pages\PendingRevisionEditor;
+
+function pendingPreviewUrl(Page $page): string
+{
+    return PreviewController::pendingUrl($page, $page->pendingRevision()->firstOrFail());
+}
+
+beforeEach(function (): void {
+    $this->actingAs(cmsUser(CmsPermission::PagesEdit));
+});
 
 test('a signed preview renders the page with its pending revision applied, without letting it be indexed', function (): void {
     makePage(['title' => 'Home', 'slug' => 'home'], home: true);
@@ -21,7 +35,7 @@ test('a signed preview renders the page with its pending revision applied, witho
     $editor->addBlock($page, $type, ['html' => '<p>Extra blok</p>'], null);
     $editor->reorderBlocks($page, [-1, $changed->id, $kept->id], null);
 
-    $this->get(PreviewController::pendingUrl($page))
+    $this->get(pendingPreviewUrl($page))
         ->assertOk()
         ->assertSeeInOrder([
             'Voorgestelde titel',
@@ -61,32 +75,75 @@ test('a pending preview leaves out hidden blocks and uses the pending SEO fields
     $revision->snapshot = $snapshot;
     $revision->save();
 
-    $this->get(PreviewController::pendingUrl($page))
+    $this->get(pendingPreviewUrl($page))
         ->assertOk()
         ->assertSee('Voorgestelde omschrijving', false)
         ->assertDontSee('Live omschrijving', false)
         ->assertDontSee('Zichtbaar', false);
 });
 
-test('a pending preview of a page without a pending revision shows the page as it is', function (): void {
-    $page = makePage(['title' => 'Live titel']);
-    addBlock($page, 'rich_text', ['html' => '<p>Live tekst</p>']);
+test('a pending preview runs no insert, update or delete query', function (): void {
+    $page = pendingPage();
+    $block = addBlock($page, 'rich_text', ['html' => '<p>Oud</p>']);
+    app(PendingRevisionEditor::class)->updateBlock($page, $block->id, app(BlockRegistry::class)->find('rich_text'), ['html' => '<p>Nieuw</p>'], null);
+    $url = pendingPreviewUrl($page);
+    $writes = [];
 
-    $this->get(PreviewController::pendingUrl($page))
+    DB::listen(function (QueryExecuted $query) use (&$writes): void {
+        if (preg_match('/^\s*(insert|update|delete|replace)\b/i', $query->sql) === 1) {
+            $writes[] = $query->sql;
+        }
+    });
+
+    $this->get($url)
         ->assertOk()
-        ->assertSee('Live titel', false)
-        ->assertSee('Live tekst', false)
-        ->assertHeader('X-Robots-Tag', 'noindex, nofollow');
+        ->assertSee('Nieuw', false);
+
+    expect($writes)->toBe([]);
+});
+
+test('a pending preview link stops working once its revision is no longer pending', function (): void {
+    $page = pendingPage();
+    $url = pendingPreviewUrl($page);
+
+    app(DiscardPendingRevision::class)->handle($page);
+
+    $this->get($url)->assertNotFound();
+
+    app(PendingRevisionEditor::class)->updatePage($page, ['title' => 'Later voorstel'], null);
+
+    $this->get($url)
+        ->assertNotFound()
+        ->assertDontSee('Later voorstel', false);
 });
 
 test('a pending preview link needs a valid signature and expires', function (): void {
     $page = pendingPage();
-    $url = PreviewController::pendingUrl($page);
+    $other = pendingPage('Andere');
+    $revision = $page->pendingRevision()->firstOrFail();
+    $url = PreviewController::pendingUrl($page, $revision);
 
-    $this->get(sprintf('/cms/preview/%d/pending', $page->id))->assertForbidden();
-    $this->get(str_replace(sprintf('/preview/%d/', $page->id), sprintf('/preview/%d/', $page->id + 1), $url))->assertForbidden();
+    $this->get(sprintf('/cms/preview/%d/pending/%d', $page->id, $revision->id))->assertForbidden();
+    $this->get(str_replace(sprintf('/pending/%d', $revision->id), sprintf('/pending/%d', $other->pendingRevision()->firstOrFail()->id), $url))->assertForbidden();
+    $this->get(PreviewController::pendingUrl($page, $other->pendingRevision()->firstOrFail()))->assertNotFound();
 
     $this->travel(61)->minutes();
 
     $this->get($url)->assertForbidden();
+});
+
+test('a pending preview needs a signed in user with the page edit permission', function (): void {
+    $page = pendingPage();
+    $url = pendingPreviewUrl($page);
+
+    $this->actingAs(cmsUser(CmsPermission::Media));
+    $this->get($url)
+        ->assertForbidden()
+        ->assertDontSee('Live concept', false);
+
+    auth()->logout();
+
+    $this->getJson($url)
+        ->assertUnauthorized()
+        ->assertDontSee('Live concept', false);
 });

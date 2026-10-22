@@ -10,7 +10,7 @@ The package registers these routes from its service provider, unless `cms.routes
 | Method | URI | Name | Middleware |
 |---|---|---|---|
 | `GET` | `/cms/preview/{page}` | `cms.preview` | `signed` |
-| `GET` | `/cms/preview/{page}/pending` | `cms.preview.pending` | `signed` |
+| `GET` | `/cms/preview/{page}/pending/{revision}` | `cms.preview.pending` | `cms.preview.pending_middleware`, `can:cms.pages.edit`, `signed` |
 | `POST` | `/cms/contact/{block}` | `cms.contact` | `throttle:30,1` |
 | `GET` | `/sitemap.xml` | `cms.sitemap` | page cache |
 | `GET` | `/robots.txt` | `cms.robots` | page cache |

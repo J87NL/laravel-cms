@@ -111,8 +111,13 @@ timestamp, a per-IP and a site-wide hourly limit, and a per-minute route throttl
 
 ## Previews
 
-Preview links, also those of a pending revision, are signed and expire after `cms.preview.minutes`. Anyone with a
-valid link can see the page. Only hand them out to users who may edit pages, as `j87nl/laravel-vue-cms` does. See
+Preview links are signed and expire after `cms.preview.minutes`. Anyone with a valid draft preview link can see the
+page. Only hand them out to users who may edit pages, as `j87nl/laravel-vue-cms` does.
+
+The preview of a pending revision shows changes nobody has approved yet, so it is gated harder: besides the signature
+it needs a signed-in user with `cms.pages.edit` (`cms.preview.pending_middleware`, by default `web` and `auth`), and the
+link names the pending revision it was made for. Once that revision is published or discarded the link answers 404,
+also when a new pending revision has been started since, so a shared link never shows later changes. See
 [Previews](previews.md).
 
 ## JSON-LD

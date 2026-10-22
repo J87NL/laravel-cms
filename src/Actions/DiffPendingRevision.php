@@ -9,13 +9,14 @@ use J87NL\Cms\Blocks\BlockRegistry;
 use J87NL\Cms\Html\PlainText;
 use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\Page;
+use J87NL\Cms\Models\Revision;
 use J87NL\Cms\Pages\PendingRevisionApplier;
 use J87NL\Cms\Pages\PendingRevisionEditor;
 use J87NL\Cms\Pages\WordDiff;
 
 /**
  * @phpstan-type FieldDiff array{field: string, before: mixed, after: mixed}
- * @phpstan-type ValueDiff array{key: string, before: mixed, after: mixed, words: list<array{type: string, text: string}>|null}
+ * @phpstan-type ValueDiff array{key: string, before: mixed, after: mixed, words: list<array{type: string, text: string}>|null, markup_changed: bool, links: array{before: list<string>, after: list<string>}|null}
  * @phpstan-type BlockDiff array{id: int, type: string, label: string, status: string, moved: bool, position: array{before: int|null, after: int|null}, visible: array{before: bool|null, after: bool|null}, changes: list<ValueDiff>}
  * @phpstan-type RevisionDiff array{revision_id: int, fields: list<FieldDiff>, blocks: list<BlockDiff>, summary: array{fields: int, added: int, removed: int, changed: int, moved: int, reordered: bool}}
  */
@@ -38,9 +39,9 @@ class DiffPendingRevision
     /**
      * @return RevisionDiff|null
      */
-    public function handle(Page $page): ?array
+    public function handle(Page $page, ?Revision $revision = null, bool $withWords = true): ?array
     {
-        $revision = $this->pending->find($page);
+        $revision ??= $this->pending->find($page);
 
         if (is_null($revision)) {
             return null;
@@ -51,7 +52,7 @@ class DiffPendingRevision
         $before = new Collection(array_values($plan->live->all()));
         $after = $result->blocks;
         $moved = $this->movedIds($before, $after);
-        $blocks = $this->blocks($before, $after, $moved);
+        $blocks = $this->blocks($before, $after, $moved, $withWords);
         $fields = $this->fields($page, $result);
 
         return [
@@ -100,21 +101,22 @@ class DiffPendingRevision
      * @param  list<int>  $moved
      * @return list<BlockDiff>
      */
-    private function blocks(Collection $before, Collection $after, array $moved): array
+    private function blocks(Collection $before, Collection $after, array $moved, bool $withWords): array
     {
         $beforeById = $before->keyBy('id');
-        $afterById = $after->keyBy('id');
+        $removedBefore = [];
         $removedAfter = [];
-        $anchor = 'start';
 
-        foreach ($before->values() as $position => $block) {
-            if ($afterById->has($block->id)) {
-                $anchor = $block->id;
+        foreach ($this->removedAnchors($before, $after, $moved) as $position => [$side, $anchor]) {
+            $removed = $this->entry($before->values()->get($position), null, $position + 1, null, $moved, $withWords);
+
+            if ($side === 'before') {
+                $removedBefore[$anchor][] = $removed;
 
                 continue;
             }
 
-            $removedAfter[$anchor][] = $this->entry($block, null, $position + 1, null, $moved);
+            $removedAfter[$anchor][] = $removed;
         }
 
         $entries = $removedAfter['start'] ?? [];
@@ -123,21 +125,53 @@ class DiffPendingRevision
             $previous = $beforeById->get($block->id);
             $previousPosition = is_null($previous) ? null : $before->search(fn (Block $candidate): bool => $candidate->id === $block->id);
 
-            $entries[] = $this->entry($previous, $block, is_int($previousPosition) ? $previousPosition + 1 : null, $position + 1, $moved);
-
-            foreach ($removedAfter[$block->id] ?? [] as $removed) {
-                $entries[] = $removed;
-            }
+            $entries = [
+                ...$entries,
+                ...$removedBefore[$block->id] ?? [],
+                $this->entry($previous, $block, is_int($previousPosition) ? $previousPosition + 1 : null, $position + 1, $moved, $withWords),
+                ...$removedAfter[$block->id] ?? [],
+            ];
         }
 
         return $entries;
     }
 
     /**
+     * @param  Collection<int, Block>  $before
+     * @param  Collection<int, Block>  $after
+     * @param  list<int>  $moved
+     * @return array<int, array{string, int|string}>
+     */
+    private function removedAnchors(Collection $before, Collection $after, array $moved): array
+    {
+        $afterIds = array_map('intval', $after->modelKeys());
+        $live = array_map('intval', $before->values()->modelKeys());
+        $stable = array_values(array_filter($live, fn (int $id): bool => in_array($id, $afterIds, true) && ! in_array($id, $moved, true)));
+        $anchors = [];
+
+        foreach ($live as $position => $id) {
+            if (in_array($id, $afterIds, true)) {
+                continue;
+            }
+
+            $previous = array_values(array_filter(array_slice($live, 0, $position), fn (int $candidate): bool => in_array($candidate, $stable, true)));
+            $next = array_values(array_filter(array_slice($live, $position + 1), fn (int $candidate): bool => in_array($candidate, $stable, true)));
+
+            $anchors[$position] = match (true) {
+                $previous !== [] => ['after', $previous[array_key_last($previous)]],
+                $next !== [] => ['before', $next[0]],
+                default => ['after', 'start'],
+            };
+        }
+
+        return $anchors;
+    }
+
+    /**
      * @param  list<int>  $moved
      * @return BlockDiff
      */
-    private function entry(?Block $before, ?Block $after, ?int $positionBefore, ?int $positionAfter, array $moved): array
+    private function entry(?Block $before, ?Block $after, ?int $positionBefore, ?int $positionAfter, array $moved, bool $withWords): array
     {
         $block = $after ?? $before;
         $status = $this->status($before, $after);
@@ -160,7 +194,7 @@ class DiffPendingRevision
             'changes' => $status === self::UNCHANGED ? [] : $this->values(
                 is_array($before?->data) ? $before->data : [],
                 is_array($after?->data) ? $after->data : [],
-                $status === self::CHANGED,
+                $withWords && $status === self::CHANGED,
             ),
         ];
     }
@@ -210,19 +244,46 @@ class DiffPendingRevision
                 continue;
             }
 
-            $html = (is_string($old) && PlainText::looksLikeHtml($old)) || (is_string($new) && PlainText::looksLikeHtml($new));
-            $old = $html && is_string($old) ? PlainText::fromHtml($old) : $old;
-            $new = $html && is_string($new) ? PlainText::fromHtml($new) : $new;
-
-            $changes[] = [
-                'key' => (string) $key,
-                'before' => $old,
-                'after' => $new,
-                'words' => $withWords && is_string($old) && is_string($new) ? WordDiff::words($old, $new) : null,
-            ];
+            $changes[] = $this->change((string) $key, $old, $new, $withWords);
         }
 
         return $changes;
+    }
+
+    /**
+     * @return ValueDiff
+     */
+    private function change(string $key, mixed $old, mixed $new, bool $withWords): array
+    {
+        $html = (is_string($old) && PlainText::looksLikeHtml($old)) || (is_string($new) && PlainText::looksLikeHtml($new));
+
+        if (! $html) {
+            return [
+                'key' => $key,
+                'before' => $old,
+                'after' => $new,
+                'words' => $withWords && is_string($old) && is_string($new) ? WordDiff::words($old, $new) : null,
+                'markup_changed' => false,
+                'links' => null,
+            ];
+        }
+
+        $oldText = is_string($old) ? PlainText::fromHtml($old) : $old;
+        $newText = is_string($new) ? PlainText::fromHtml($new) : $new;
+        $oldLinks = is_string($old) ? PlainText::links($old) : [];
+        $newLinks = is_string($new) ? PlainText::links($new) : [];
+
+        return [
+            'key' => $key,
+            'before' => $oldText,
+            'after' => $newText,
+            'words' => $withWords && is_string($oldText) && is_string($newText) ? WordDiff::words($oldText, $newText) : null,
+            'markup_changed' => $oldText === $newText,
+            'links' => $oldLinks === $newLinks ? null : [
+                'before' => $oldLinks,
+                'after' => $newLinks,
+            ],
+        ];
     }
 
     /**

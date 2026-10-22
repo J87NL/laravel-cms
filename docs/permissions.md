@@ -19,7 +19,9 @@ The package names six permissions in the `J87NL\Cms\CmsPermission` enum:
 The package itself only checks permissions in the [MCP tools](mcp-tools.md): `cms.pages.edit`, `cms.menus`,
 `cms.media` and `cms.redirects`, each for its own tools, and `cms.pages.publish` (on top of `cms.pages.edit`) for the
 live tools, `page_publish`, `page_unpublish` and `revision_discard`. `cms.settings` is never checked in this package; it
-exists for the admin. The public routes and the [actions](actions.md) check no permissions.
+exists for the admin. The [actions](actions.md) check no permissions, and neither do the public routes, except the
+preview of a pending revision, which needs a signed-in user with `cms.pages.edit` (see
+[Previews](previews.md#previewing-a-pending-revision)).
 
 The admin of `j87nl/laravel-vue-cms` checks all six on its routes. Which permission opens which screen is listed in
 its [permissions documentation](https://github.com/J87NL/laravel-vue-cms/blob/main/docs/permissions.md).

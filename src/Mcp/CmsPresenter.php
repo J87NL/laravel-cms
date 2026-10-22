@@ -16,6 +16,9 @@ use J87NL\Cms\Models\Revision;
 use J87NL\Cms\Pages\PageVisibility;
 use J87NL\Cms\Pages\PendingRevisionEditor;
 
+/**
+ * @phpstan-import-type BlockDiff from DiffPendingRevision
+ */
 class CmsPresenter
 {
     public function __construct(
@@ -96,7 +99,7 @@ class CmsPresenter
                 ->all()),
             'pending_revision' => is_null($pending) ? null : [
                 ...$this->pendingRevision($pending),
-                'changes' => $this->pendingChanges($page),
+                'changes' => $this->pendingChanges($page, $pending),
             ],
         ];
     }
@@ -104,9 +107,9 @@ class CmsPresenter
     /**
      * @return array<string, mixed>|null
      */
-    public function pendingChanges(Page $page): ?array
+    public function pendingChanges(Page $page, ?Revision $revision = null): ?array
     {
-        $diff = $this->diffPendingRevision->handle($page);
+        $diff = $this->diffPendingRevision->handle($page, $revision, withWords: false);
 
         if (is_null($diff)) {
             return null;
@@ -120,17 +123,32 @@ class CmsPresenter
                 'live' => $field['before'],
                 'pending' => $field['after'],
             ], $diff['fields']),
-            'blocks' => array_values(array_map(fn (array $block): array => [
-                'id' => $block['id'],
-                'type' => $block['type'],
-                'change' => $block['status'],
-                'moved' => $block['moved'],
-                'changed_keys' => $block['status'] === DiffPendingRevision::CHANGED
-                    ? array_column($block['changes'], 'key')
-                    : [],
-                'visibility_changed' => $block['status'] === DiffPendingRevision::CHANGED && $block['visible']['before'] !== $block['visible']['after'],
-            ], $blocks)),
+            'blocks' => array_values(array_map(fn (array $block): array => $this->blockChange($block), $blocks)),
             'reordered' => $diff['summary']['reordered'],
+        ];
+    }
+
+    /**
+     * @param  BlockDiff  $block
+     * @return array<string, mixed>
+     */
+    private function blockChange(array $block): array
+    {
+        $changes = $block['status'] === DiffPendingRevision::CHANGED ? $block['changes'] : [];
+
+        return [
+            'id' => $block['id'],
+            'type' => $block['type'],
+            'change' => $block['status'],
+            'moved' => $block['moved'],
+            'changed_keys' => array_column($changes, 'key'),
+            'markup_only_keys' => array_values(array_column(array_filter($changes, fn (array $change): bool => $change['markup_changed']), 'key')),
+            'link_changes' => array_values(array_map(fn (array $change): array => [
+                'key' => $change['key'],
+                'live' => $change['links']['before'] ?? [],
+                'pending' => $change['links']['after'] ?? [],
+            ], array_filter($changes, fn (array $change): bool => ! is_null($change['links'])))),
+            'visibility_changed' => $block['status'] === DiffPendingRevision::CHANGED && $block['visible']['before'] !== $block['visible']['after'],
         ];
     }
 
