@@ -74,6 +74,7 @@ class CmsPresenter
             ->get();
 
         $pending = $this->pending->find($page);
+        $pending?->setRelation('page', $page);
 
         return [
             ...$this->pageSummary($page, null, ! is_null($pending)),
@@ -100,7 +101,10 @@ class CmsPresenter
      */
     public function pendingRevision(Revision $revision): array
     {
-        $content = PendingRevisionEditor::content($revision->snapshot);
+        $snapshot = is_null($revision->page)
+            ? $revision->snapshot
+            : $this->pending->withLiveBlocks($revision->page, $revision->snapshot);
+        $content = PendingRevisionEditor::content($snapshot);
         $blocks = $content['blocks'];
 
         usort($blocks, fn (array $a, array $b): int => (int) ($a['sort_order'] ?? 0) <=> (int) ($b['sort_order'] ?? 0));

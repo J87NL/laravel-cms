@@ -68,7 +68,8 @@ ignore it. Only a published page has one: taking a page offline applies it to th
 
 The MCP draft tools create and change it, see [MCP tools](mcp-tools.md#draft-and-live-mode). In code,
 `J87NL\Cms\Pages\PendingRevisionEditor` does the same: `updatePage()`, `addBlock()`, `updateBlock()`,
-`removeBlock()`, `reorderBlocks()`, `find()` and `discard()`. Call these inside a transaction that locks the page row,
+`removeBlock()`, `reorderBlocks()`, `find()` and `discard()`. Blocks added on the live page after the pending revision
+started are taken into it and its base unchanged (`withLiveBlocks()`), so they can be changed or removed there too. Call these inside a transaction that locks the page row,
 as the tools do.
 
 ```php

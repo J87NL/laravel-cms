@@ -13,6 +13,7 @@ All notable changes to this package are documented here. The format follows [Kee
 - MCP tools `page_update_live`, `block_add_live`, `block_update_live`, `block_remove_live` and `blocks_reorder_live` change a page directly, also when it is published. They need `cms.pages.publish` and are marked destructive.
 - MCP tools `page_publish`, `page_unpublish` and `revision_discard`, marked destructive. They need `cms.pages.edit` and `cms.pages.publish` and check the `cms.pages.write` gate.
 - `pages_list` and `page_get` report `has_pending_revision`; `page_get` returns `pending_revision`.
+- A block added on the live page after a pending revision started is taken into that pending revision and its base unchanged (`PendingRevisionEditor::withLiveBlocks()`), so the draft tools can change or remove it instead of answering that it was not found.
 
 ### Changed
 

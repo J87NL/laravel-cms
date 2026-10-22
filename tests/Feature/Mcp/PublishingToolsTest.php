@@ -633,6 +633,62 @@ it('applies a new block order from the pending revision and keeps live-only bloc
     ]);
 });
 
+it('lets the draft tools change and remove a block added live after the pending revision started', function (): void {
+    makePage(['title' => 'Home', 'slug' => 'home'], home: true);
+    $page = makePage(['title' => 'Live', 'slug' => 'live']);
+    $first = addBlock($page, 'rich_text', ['html' => '<p>1</p>']);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'title' => 'Voorstel'])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(BlockAddLiveTool::class, ['page_id' => $page->id, 'type' => 'rich_text', 'data' => ['html' => '<p>live 1</p>']])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(BlockAddLiveTool::class, ['page_id' => $page->id, 'type' => 'rich_text', 'data' => ['html' => '<p>live 2</p>']])
+        ->assertOk();
+
+    [$changed, $removed] = Block::query()
+        ->where('page_id', $page->id)
+        ->whereKeyNot($first->id)
+        ->orderBy('id')
+        ->get()
+        ->all();
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(PageGetTool::class, ['page_id' => $page->id])
+        ->assertStructuredContent(fn (AssertableJson $json): AssertableJson => $json
+            ->where('pending_revision.blocks.1.id', $changed->id)
+            ->where('pending_revision.blocks.2.id', $removed->id)
+            ->etc());
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(BlockUpdateTool::class, ['block_id' => $changed->id, 'data' => ['html' => '<p>live 1 nieuw</p>']])
+        ->assertOk();
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(BlockRemoveTool::class, ['block_id' => $removed->id])
+        ->assertOk();
+
+    expect(array_map(fn (array $block): mixed => $block[1], liveBlockSummary($page)))->toBe([
+        '<p>1</p>',
+        '<p>live 1</p>',
+        '<p>live 2</p>',
+    ]);
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(PagePublishTool::class, ['page_id' => $page->id])
+        ->assertOk();
+
+    expect($page->refresh()->title)->toBe('Voorstel')
+        ->and(liveBlockSummary($page))->toBe([
+            [$first->id, '<p>1</p>'],
+            [$changed->id, '<p>live 1 nieuw</p>'],
+        ]);
+});
+
 it('keeps no pending revision for a draft that changes nothing', function (): void {
     $page = makePage(['title' => 'Live']);
     $first = addBlock($page, 'rich_text', ['html' => '<p>1</p>']);

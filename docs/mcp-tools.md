@@ -99,6 +99,9 @@ pending revision again, so `pending_revision` is `null` in that response.
 - Blocks keep their id in the pending revision. A block added there gets a negative id (`-1`, `-2`, …) until it is
   published; an id is never handed out twice. Pass `page_id` to `block_update` and `block_remove` for a block that is
   not on the live page.
+- A block added directly on the live page after the pending revision started is taken into the pending revision (and
+  its base) unchanged, so `page_get` shows it under `pending_revision` and `block_update`, `block_remove` and
+  `blocks_reorder` can change it there. Publishing leaves it as it is unless the pending revision changed it.
 - `page_publish` applies only what the pending revision changed compared with its base, in one transaction: changed
   page fields and blocks are written (a block keeps its id), new blocks are created and removed blocks are deleted.
   Fields and blocks the pending revision left alone keep their live value, so changes made directly on the live page in

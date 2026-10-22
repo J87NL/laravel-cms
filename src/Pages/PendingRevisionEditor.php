@@ -38,7 +38,45 @@ class PendingRevisionEditor
             return $this->recordRevision->snapshot($page);
         }
 
-        return self::content($revision->snapshot);
+        return self::content($this->withLiveBlocks($page, $revision->snapshot));
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    public function withLiveBlocks(Page $page, array $snapshot): array
+    {
+        $base = self::base($snapshot);
+
+        if (is_null($base)) {
+            return $snapshot;
+        }
+
+        $content = self::content($snapshot);
+        $knownIds = array_map(fn (array $block): int => (int) ($block['id'] ?? 0), [
+            ...$base['blocks'],
+            ...$content['blocks'],
+        ]);
+        $added = array_values(array_filter(
+            $this->recordRevision->snapshot($page)['blocks'],
+            fn (array $block): bool => ! in_array((int) $block['id'], $knownIds, true),
+        ));
+
+        if ($added === []) {
+            return $snapshot;
+        }
+
+        $snapshot['blocks'] = [
+            ...$content['blocks'],
+            ...$added,
+        ];
+        $snapshot['pending']['base']['blocks'] = [
+            ...$base['blocks'],
+            ...$added,
+        ];
+
+        return $snapshot;
     }
 
     /**
@@ -235,7 +273,7 @@ class PendingRevisionEditor
             $revision->page()->associate($page);
         }
 
-        $snapshot = $mutate($revision->snapshot);
+        $snapshot = $mutate($revision->exists ? $this->withLiveBlocks($page, $revision->snapshot) : $revision->snapshot);
         $snapshot['pending']['edited_by'] = $userId;
 
         if (! self::changes($snapshot)) {

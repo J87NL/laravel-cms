@@ -22,7 +22,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('page_publish')]
 #[Title('Publish CMS page')]
-#[Description('Publishes a page: a draft or unpublished page goes live, and the pending revision of a page (see page_get) replaces the live content. Visitors see the result at once; a revision is recorded and the page cache is flushed. Publishing a pending revision replaces the live page fields and blocks with the pending ones, including changes made directly on the live page after the pending revision was started. Needs the CMS publish permission. Pages with a planned publication are refused. Confirm with the user first.')]
+#[Description('Publishes a page: a draft or unpublished page goes live, and the pending revision of a page (see page_get) replaces the live content. Visitors see the result at once; a revision is recorded and the page cache is flushed. Publishing a pending revision applies only what it changed compared with the live page it started from: changed fields and blocks are written, added blocks are created and removed blocks are deleted. Changes made directly on the live page after the pending revision was started stay, unless the pending revision changed the same field or block: then the pending revision wins. Needs the CMS publish permission. Pages with a planned publication are refused. Confirm with the user first.')]
 #[IsReadOnly(false)]
 #[IsDestructive]
 class PagePublishTool extends Tool
