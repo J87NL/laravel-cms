@@ -156,13 +156,7 @@ class PageSeo
      */
     private function visibleBlocks(Page $page): array
     {
-        return array_values(Block::query()
-            ->where('page_id', $page->id)
-            ->where('is_visible', true)
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get()
-            ->all());
+        return array_values($page->visibleBlocks()->all());
     }
 
     /**

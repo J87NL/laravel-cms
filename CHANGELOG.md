@@ -4,6 +4,15 @@ All notable changes to this package are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- `DiffPendingRevision::handle(Page $page): ?array` returns a structured diff of the pending revision against the live page, as publishing would apply it: changed page fields with their live and pending value, and every block with its status (`added`, `removed`, `changed`, `unchanged`), whether it moved, its position before and after, its visibility before and after, and its changed data values by dot path. Rich text is compared as plain text, and changed text values carry a word-level diff (`J87NL\Cms\Pages\WordDiff`).
+- A signed, expiring, `noindex` preview of a page with its pending revision applied: route `cms.preview.pending` (`GET /cms/preview/{page}/pending`) and `PreviewController::pendingUrl(Page $page)`. Nothing is written; the page renders from memory.
+- `PendingRevisionApplier::plan()` returns a `J87NL\Cms\Pages\PendingRevisionPlan`: what publishing would change, without writing. `PendingRevisionPlan::page()` gives the resulting page with its blocks for rendering. `PublishPage` and taking a page offline apply the same plan, so the diff, the preview and publishing always agree.
+- `Page::visibleBlocks()` returns the visible blocks in display order, from the loaded `blocks` relation when it is loaded. The block renderer and the SEO tags use it.
+- `page_get` (and the other tools that return a page) adds `pending_revision.changes`: a short summary of what publishing would change (fields with their live and pending value, and the added, removed, changed and moved blocks with the changed data keys).
+- `J87NL\Cms\Html\PlainText` turns rich text into plain text; `AbstractBlockType::plain()` uses it.
+
 ## [0.3.0] - 2026-10-22
 
 ### Added

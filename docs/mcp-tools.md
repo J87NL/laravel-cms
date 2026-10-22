@@ -96,6 +96,11 @@ pending revision again, so `pending_revision` is `null` in that response.
 
 - `page_get` returns the live page and, under `pending_revision`, the pending page fields and blocks. `pages_list` and
   `page_get` report `has_pending_revision`.
+- `pending_revision.changes` in `page_get` (and in the other tools that return the whole page) summarises what
+  publishing would change compared with the live page, from
+  [`DiffPendingRevision`](revisions.md#comparing-a-pending-revision-with-the-live-page): `fields` (each with `field`,
+  `live` and `pending`), `blocks` (only the blocks that change or move, each with `id`, `type`, `change` as `added`,
+  `removed` or `changed`, `moved`, `changed_keys` and `visibility_changed`) and `reordered`.
 - Blocks keep their id in the pending revision. A block added there gets a negative id (`-1`, `-2`, …) until it is
   published; an id is never handed out twice. Pass `page_id` to `block_update` and `block_remove` for a block that is
   not on the live page.

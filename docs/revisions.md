@@ -86,4 +86,34 @@ everything the pending revision left alone keeps its live value. It then deletes
 page when it is not published yet and records a revision. A published page without a pending revision, or a page with a planned publication, is refused with
 a `ValidationException`. Images used in a pending revision count as in use (see [Media](media.md)).
 
+### Comparing a pending revision with the live page
+
+```php
+use J87NL\Cms\Actions\DiffPendingRevision;
+
+$diff = app(DiffPendingRevision::class)->handle($page); // null without a pending revision
+```
+
+The diff compares the live page with the page as publishing would leave it (`PendingRevisionApplier::plan()`), so it
+shows exactly what publishing changes. It returns:
+
+- `revision_id`: the id of the pending revision;
+- `fields`: every changed page field (`Page::CONTENT_ATTRIBUTES`) as `field`, `before` (live) and `after`;
+- `blocks`: every block in its order after publishing, with removed blocks at the place they had on the live page.
+  Each has `id` (negative for a block that only exists in the pending revision), `type`, `label` (the translated
+  type label), `status` (`added`, `removed`, `changed` or `unchanged`), `moved` (it changed place compared with the
+  other blocks both sides share), `position` (`before` and `after`, 1-based, `null` where it does not exist),
+  `visible` (`before` and `after`) and `changes`;
+- `changes` lists the block data values that differ, by dot path (`html`, `tiles.1.name`), as `key`, `before`, `after`
+  and `words`. An added block lists all its values with `before` `null`, a removed block with `after` `null`. A value
+  that holds HTML is compared as plain text. When both sides are text, `words` holds a word-level diff as a list of
+  segments with `type` `equal`, `added` or `removed` and their `text`; otherwise it is `null`;
+- `summary`: the number of changed `fields` and of `added`, `removed`, `changed` and `moved` blocks, and `reordered`.
+
+`J87NL\Cms\Pages\WordDiff::words(string $before, string $after)` makes the word-level diff. It compares words after
+collapsing whitespace. When two texts differ in more than 400 words between their first and last change, it shows
+the changed part as removed and added as a whole.
+
+A signed preview of the page with its pending revision applied is described in [Previews](previews.md#previewing-a-pending-revision).
+
 `Revision::author()` belongs to `cms.user_model`, or to `auth.providers.users.model` when that is `null`.

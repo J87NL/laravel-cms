@@ -25,3 +25,26 @@ The page renders in your layout, with its blocks, exactly like the public page, 
 - the response is never stored in the [page cache](page-cache.md).
 
 Hidden blocks are not shown in a preview either.
+
+## Previewing a pending revision
+
+A published page can have a pending revision (see [Pending revisions](revisions.md#pending-revisions)). Its preview
+shows the page as it would look after publishing it:
+
+```php
+use J87NL\Cms\Http\Controllers\PreviewController;
+
+$url = PreviewController::pendingUrl($page);
+```
+
+`PreviewController::pendingUrl(Page $page): string` returns a temporary signed URL for the route `cms.preview.pending`
+(`GET /cms/preview/{page}/pending`), valid for `cms.preview.minutes` minutes like the draft preview. The response has
+the same `noindex` headers and meta tag and is never cached.
+
+The preview applies the pending revision in memory, in the same way as publishing does
+(`PendingRevisionApplier::plan()`), so changes made on the live page that the pending revision left alone are shown
+too. Nothing is written to the database. A page without a pending revision renders as it is. Blocks added in the
+pending revision do not exist yet, so a contact form among them cannot be sent from the preview.
+
+The block renderer and the SEO tags read the blocks through `Page::visibleBlocks()`, which uses the page's loaded
+`blocks` relation when it is loaded. A layout that renders blocks itself should do the same to show the pending blocks.

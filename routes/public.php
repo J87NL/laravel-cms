@@ -18,6 +18,10 @@ Route::middleware([
         ->middleware('signed')
         ->name(PreviewController::ROUTE);
 
+    Route::get('cms/preview/{page}/pending', [PreviewController::class, 'pending'])
+        ->middleware('signed')
+        ->name(PreviewController::PENDING_ROUTE);
+
     Route::post('cms/contact/{block}', [ContactFormController::class, 'store'])
         ->middleware('throttle:30,1')
         ->name('cms.contact');

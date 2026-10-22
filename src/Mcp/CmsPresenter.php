@@ -6,6 +6,7 @@ namespace J87NL\Cms\Mcp;
 
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Arr;
+use J87NL\Cms\Actions\DiffPendingRevision;
 use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\MediaAsset;
 use J87NL\Cms\Models\MenuItem;
@@ -20,6 +21,7 @@ class CmsPresenter
     public function __construct(
         private readonly PageVisibility $visibility,
         private readonly PendingRevisionEditor $pending,
+        private readonly DiffPendingRevision $diffPendingRevision,
     ) {}
 
     /**
@@ -92,7 +94,43 @@ class CmsPresenter
             'blocks' => array_values($blocks
                 ->map(fn (Block $block): array => $this->block($block))
                 ->all()),
-            'pending_revision' => is_null($pending) ? null : $this->pendingRevision($pending),
+            'pending_revision' => is_null($pending) ? null : [
+                ...$this->pendingRevision($pending),
+                'changes' => $this->pendingChanges($page),
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function pendingChanges(Page $page): ?array
+    {
+        $diff = $this->diffPendingRevision->handle($page);
+
+        if (is_null($diff)) {
+            return null;
+        }
+
+        $blocks = array_filter($diff['blocks'], fn (array $block): bool => $block['status'] !== DiffPendingRevision::UNCHANGED || $block['moved']);
+
+        return [
+            'fields' => array_map(fn (array $field): array => [
+                'field' => $field['field'],
+                'live' => $field['before'],
+                'pending' => $field['after'],
+            ], $diff['fields']),
+            'blocks' => array_values(array_map(fn (array $block): array => [
+                'id' => $block['id'],
+                'type' => $block['type'],
+                'change' => $block['status'],
+                'moved' => $block['moved'],
+                'changed_keys' => $block['status'] === DiffPendingRevision::CHANGED
+                    ? array_column($block['changes'], 'key')
+                    : [],
+                'visibility_changed' => $block['status'] === DiffPendingRevision::CHANGED && $block['visible']['before'] !== $block['visible']['after'],
+            ], $blocks)),
+            'reordered' => $diff['summary']['reordered'],
         ];
     }
 

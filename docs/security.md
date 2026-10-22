@@ -111,7 +111,8 @@ timestamp, a per-IP and a site-wide hourly limit, and a per-minute route throttl
 
 ## Previews
 
-Preview links are signed and expire after `cms.preview.minutes`. Anyone with a valid link can see the page. See
+Preview links, also those of a pending revision, are signed and expire after `cms.preview.minutes`. Anyone with a
+valid link can see the page. Only hand them out to users who may edit pages, as `j87nl/laravel-vue-cms` does. See
 [Previews](previews.md).
 
 ## JSON-LD

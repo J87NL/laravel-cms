@@ -22,7 +22,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('page_get')]
 #[Title('Get CMS page')]
-#[Description('Returns one page with its live fields (title, slug, SEO fields, status, schedule) and its live blocks in display order, each with id, type, position, is_visible and data. pending_revision holds the pending revision of a published page (its page fields and blocks, blocks added there have a negative id), or null. writable is false for pages with a planned publication (publish_at): those can only be changed in the CMS admin. Use the block ids with block_update, block_remove and blocks_reorder.')]
+#[Description('Returns one page with its live fields (title, slug, SEO fields, status, schedule) and its live blocks in display order, each with id, type, position, is_visible and data. pending_revision holds the pending revision of a published page (its page fields and blocks, blocks added there have a negative id) and under changes a summary of what publishing it would change compared with the live page: changed fields with their live and pending value, and the added, removed, changed (with the changed data keys) and moved blocks; or null. writable is false for pages with a planned publication (publish_at): those can only be changed in the CMS admin. Use the block ids with block_update, block_remove and blocks_reorder.')]
 #[IsReadOnly]
 #[IsDestructive(false)]
 class PageGetTool extends Tool
