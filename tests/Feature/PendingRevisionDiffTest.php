@@ -6,6 +6,7 @@ use J87NL\Cms\Actions\DiffPendingRevision;
 use J87NL\Cms\Actions\PublishPage;
 use J87NL\Cms\Actions\SaveBlock;
 use J87NL\Cms\Blocks\BlockRegistry;
+use J87NL\Cms\Html\PlainText;
 use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\Page;
 use J87NL\Cms\Pages\PendingRevisionApplier;
@@ -313,6 +314,67 @@ test('the diff keeps a removed block next to its stable neighbour when the block
         [$third->id, 'unchanged', false],
         [$fourth->id, 'unchanged', false],
         [$first->id, 'unchanged', true],
+    ]);
+});
+
+test('the diff keeps a removed last block at the bottom', function (): void {
+    $page = makePage(['title' => 'Live']);
+    $kept = addBlock($page, 'rich_text', ['html' => '<p>Een</p>']);
+    $removed = addBlock($page, 'rich_text', ['html' => '<p>Twee</p>']);
+
+    pendingEditor()->removeBlock($page, $removed->id, null);
+
+    expect(diffBlockStatuses(pendingDiff($page)))->toBe([
+        [$kept->id, 'unchanged', false],
+        [$removed->id, 'removed', false],
+    ]);
+});
+
+test('the diff keeps consecutive removed blocks together in their live order', function (): void {
+    $page = makePage(['title' => 'Live']);
+    $first = addBlock($page, 'rich_text', ['html' => '<p>A</p>']);
+    $removedFirst = addBlock($page, 'rich_text', ['html' => '<p>B</p>']);
+    $removedSecond = addBlock($page, 'rich_text', ['html' => '<p>C</p>']);
+    $last = addBlock($page, 'rich_text', ['html' => '<p>D</p>']);
+
+    pendingEditor()->removeBlock($page, $removedFirst->id, null);
+    pendingEditor()->removeBlock($page, $removedSecond->id, null);
+
+    expect(diffBlockStatuses(pendingDiff($page)))->toBe([
+        [$first->id, 'unchanged', false],
+        [$removedFirst->id, 'removed', false],
+        [$removedSecond->id, 'removed', false],
+        [$last->id, 'unchanged', false],
+    ]);
+});
+
+test('the diff lists every block as removed in its live order when all blocks go', function (): void {
+    $page = makePage(['title' => 'Live']);
+    $first = addBlock($page, 'rich_text', ['html' => '<p>A</p>']);
+    $second = addBlock($page, 'rich_text', ['html' => '<p>B</p>']);
+
+    pendingEditor()->removeBlock($page, $first->id, null);
+    pendingEditor()->removeBlock($page, $second->id, null);
+    pendingEditor()->addBlock($page, app(BlockRegistry::class)->find('rich_text'), ['html' => '<p>Nieuw</p>'], null);
+
+    expect(diffBlockStatuses(pendingDiff($page)))->toBe([
+        [$first->id, 'removed', false],
+        [$second->id, 'removed', false],
+        [-1, 'added', false],
+    ]);
+});
+
+test('the link targets of HTML are read from the attributes, not from look-alike text', function (): void {
+    expect(PlainText::links(implode('', [
+        '<p title=" href=&quot;https://decoy.example&quot;">Lees ',
+        '<a title=\'x href=https://decoy.example\' href="https://example.com/?a=1,2&amp;b=3">meer</a>',
+        '<img src="/a.png" srcset="/a.png 1x, /b.png 2x" alt="">',
+        '<a href=/kaal>kaal</a></p>',
+    ])))->toBe([
+        'https://example.com/?a=1,2&b=3',
+        '/a.png',
+        '/a.png 1x, /b.png 2x',
+        '/kaal',
     ]);
 });
 

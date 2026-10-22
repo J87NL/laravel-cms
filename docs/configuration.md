@@ -96,7 +96,7 @@ See [Page cache](page-cache.md).
 | Key | Default | Purpose |
 |---|---|---|
 | `preview.minutes` | `60` | Lifetime of a signed preview link |
-| `preview.pending_middleware` | `['web', 'auth']` | Middleware in front of the preview of a pending revision, before `can:cms.pages.edit` and `signed`. It must start a session and sign the user in, as your admin routes do |
+| `preview.pending_middleware` | `['web', 'auth']` | Middleware in front of the preview of a pending revision, before `can:cms.pages.edit` and `signed`. It must start a session and sign the user in, as your admin routes do. Guests are redirected to the `login` route, so the app needs one (or `redirectGuestsTo()`) |
 | `scheduling.enabled` | `true` | Schedule `cms:publish-scheduled` every minute |
 
 See [Previews](previews.md) and [Scheduling](scheduling.md).

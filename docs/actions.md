@@ -30,7 +30,7 @@ of the revision and may be `null`.
 | `ChangePageStatus` | `handle(Page $page, PageStatus $status, ?int $userId): void` | Yes |
 | `PublishPage` | `handle(Page $page, ?int $userId): void` | Yes |
 | `DiscardPendingRevision` | `handle(Page $page): bool` | No |
-| `DiffPendingRevision` | `handle(Page $page): ?array` | No |
+| `DiffPendingRevision` | `handle(Page $page, ?Revision $revision = null, bool $withWords = true): ?array` | No |
 | `MakeHomePage` | `handle(Page $page): void` | No |
 | `SchedulePage` | `handle(Page $page, ?Carbon $publishAt, ?Carbon $unpublishAt): void` | No |
 | `DeletePage` | `handle(Page $page): void` | No |

@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Routing\RouteCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use J87NL\Cms\Actions\DiscardPendingRevision;
 use J87NL\Cms\Blocks\BlockRegistry;
 use J87NL\Cms\CmsPermission;
@@ -146,4 +148,32 @@ test('a pending preview needs a signed in user with the page edit permission', f
     $this->getJson($url)
         ->assertUnauthorized()
         ->assertDontSee('Live concept', false);
+});
+
+test('a guest opening a pending preview is sent to the login route', function (): void {
+    Route::get('login', fn (): string => 'Inloggen')->name('login');
+    app('router')->getRoutes()->refreshNameLookups();
+
+    $page = pendingPage();
+    $url = pendingPreviewUrl($page);
+
+    auth()->logout();
+
+    $this->get($url)
+        ->assertRedirect('/login')
+        ->assertDontSee('Live concept', false);
+});
+
+test('the pending preview middleware can be configured', function (): void {
+    $page = pendingPage();
+    $url = pendingPreviewUrl($page);
+
+    config()->set('cms.preview.pending_middleware', []);
+    app('router')->setRoutes(new RouteCollection);
+    require __DIR__.'/../../routes/public.php';
+    app('router')->getRoutes()->refreshNameLookups();
+
+    auth()->logout();
+
+    $this->getJson($url)->assertForbidden();
 });

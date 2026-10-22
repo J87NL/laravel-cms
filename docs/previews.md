@@ -34,7 +34,11 @@ shows the page as it would look after publishing it:
 ```php
 use J87NL\Cms\Http\Controllers\PreviewController;
 
-$url = PreviewController::pendingUrl($page, $page->pendingRevision);
+$revision = $page->pendingRevision;
+
+if (! is_null($revision)) {
+    $url = PreviewController::pendingUrl($page, $revision);
+}
 ```
 
 `PreviewController::pendingUrl(Page $page, Revision $revision): string` returns a temporary signed URL for the route
@@ -44,7 +48,9 @@ draft preview. The response has the same `noindex` headers and meta tag and is n
 Unlike the draft preview, the link alone is not enough:
 
 - the route runs `cms.preview.pending_middleware` (default `web` and `auth`), then `can:cms.pages.edit`, then
-  `signed`. A guest is sent to the login page (or gets a 401 for JSON), a user without `cms.pages.edit` gets a 403;
+  `signed`. A guest is sent to the login page (or gets a 401 for JSON), a user without `cms.pages.edit` gets a 403.
+  The redirect needs a route named `login` or a `redirectGuestsTo()` setting in `bootstrap/app.php`, as Fortify and
+  Breeze apps have; without either, a guest gets a 500 error instead (still without seeing the page);
 - the revision id is part of the signature. When it is no longer the page's pending revision (published, discarded,
   or replaced by a newer one) the link answers 404, so it never shows changes made after it was handed out.
 

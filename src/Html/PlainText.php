@@ -4,8 +4,19 @@ declare(strict_types=1);
 
 namespace J87NL\Cms\Html;
 
+use Dom\HTMLDocument;
+
 class PlainText
 {
+    /**
+     * @var list<string>
+     */
+    private const array LINK_ATTRIBUTES = [
+        'href',
+        'src',
+        'srcset',
+    ];
+
     public static function fromHtml(string $html): string
     {
         $html = (string) preg_replace('#<(script|style|iframe)\b[^>]*>.*?</\1\s*>#is', ' ', $html);
@@ -19,12 +30,20 @@ class PlainText
      */
     public static function links(string $html): array
     {
-        preg_match_all('#<[a-z][a-z0-9]*\b[^>]*?\s(?:href|src)\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))#i', $html, $matches, PREG_SET_ORDER | PREG_UNMATCHED_AS_NULL);
+        $document = HTMLDocument::createFromString(sprintf('<!DOCTYPE html><html><body>%s</body></html>', $html), LIBXML_NOERROR);
+        $links = [];
 
-        return array_values(array_map(
-            fn (array $match): string => trim(html_entity_decode((string) ($match[1] ?? $match[2] ?? $match[3]), ENT_QUOTES | ENT_HTML5)),
-            $matches,
-        ));
+        foreach ($document->getElementsByTagName('*') as $element) {
+            foreach (self::LINK_ATTRIBUTES as $attribute) {
+                if (! $element->hasAttribute($attribute)) {
+                    continue;
+                }
+
+                $links[] = trim((string) $element->getAttribute($attribute));
+            }
+        }
+
+        return $links;
     }
 
     public static function looksLikeHtml(string $value): bool
