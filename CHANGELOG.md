@@ -8,6 +8,13 @@ All notable changes to this package are documented here. The format follows [Kee
 
 - The `link_tiles` block type (`LinkTilesBlock`): an optional heading and a reorderable list of tiles with a name, an optional image and an optional `https://` link, rendered as image or name. The `rel` value is chosen per block: `noopener`, `me noopener` or `sponsored noopener`. Images on tiles count as in use. It replaces app blocks such as sponsors and social links.
 - `<x-cms::image>` takes an optional `alt` attribute that replaces the asset's alt text.
+- `ReplaceMediaFile` gives a media asset a new file in place. The asset keeps its id, alt text, caption and focal point, so every block that uses it shows the new file. The file gets the same checks as an upload, the conversions are made again, the old files are deleted after the transaction commits, and the page cache is flushed.
+- `J87NL\Cms\Media\UploadedImage` holds the upload size check and file naming that `UploadMedia` and `ReplaceMediaFile` share.
+
+### Changed
+
+- The `UploadMedia` constructor takes an `UploadedImage` next to the `ImageCleaner`. Code that builds it with `new` must pass one; resolving it from the container keeps working.
+- `DeleteMedia` checks the usage and deletes the rows inside a transaction that locks the asset row, and removes the files only after the commit. A rolled back delete keeps the files. The constructor takes the media library `Filesystem`.
 
 ## [0.2.2] - 2026-10-21
 

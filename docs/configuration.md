@@ -200,7 +200,7 @@ See [Contact form](contact-form.md).
 | Key | Default | Purpose |
 |---|---|---|
 | `media.disk` | `'public'` | Filesystem disk of the media collection |
-| `media.max_upload_kilobytes` | `10240` | Largest upload in kilobytes. `UploadMedia` refuses a larger file; `0` switches the check off |
+| `media.max_upload_kilobytes` | `10240` | Largest upload in kilobytes. `UploadMedia` and `ReplaceMediaFile` refuse a larger file; `0` switches the check off |
 | `media.max_pixels` | `40000000` | Largest image in pixels (width times height) that an upload may have |
 | `media.widths` | `[480, 960, 1600]` | Widths of the WebP conversions |
 

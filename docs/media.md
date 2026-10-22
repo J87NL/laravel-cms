@@ -59,6 +59,33 @@ original is smaller.
 
 Because the conversions are queued, run a queue worker. Until the conversions exist, the original file is used.
 
+## Replacing the file
+
+```php
+use J87NL\Cms\Actions\ReplaceMediaFile;
+
+$asset = app(ReplaceMediaFile::class)->handle($asset, $request->file('file'));
+```
+
+`ReplaceMediaFile::handle(MediaAsset $asset, UploadedFile $file): MediaAsset` gives an asset a new file while it keeps
+its id, alt text, caption and focal point. Blocks, pages and settings refer to the asset by id, so they show the new
+file without being relinked.
+
+The new file goes through the same checks as an upload: the size limit `cms.media.max_upload_kilobytes`, a failed
+upload, and `ImageCleaner` with the same refusals and metadata stripping. A refusal is a `ValidationException` on
+`file`, and the current file stays in place.
+
+In one transaction, the action locks the asset, moves its current media item out of the `file` collection (into
+`replaced`), stores the new file in it and touches the asset. The media library then creates new conversions for every
+width in `cms.media.widths`, under new URLs, so browsers and proxies never keep showing the old image. The old original
+and its conversions are deleted only after the transaction commits; when it rolls back, the old file stays and the files
+of the new one are removed. After the commit, the files of each old media item are removed first and its row is deleted
+after that. When removing the files fails, the replacement still succeeds: the error is reported, the old media item
+stays in the `replaced` collection, and the next replacement of the asset tries again. Saving the new media item flushes
+the [page cache](page-cache.md).
+
+There is no MCP tool to upload or replace a file: files are only added and replaced in the admin.
+
 ## Using an asset
 
 | Method | Returns |
@@ -90,7 +117,9 @@ counts the uses:
 - the site settings `og_image_id` and `entity_image_id`.
 
 `MediaUsage::counts()` returns `[assetId => count]` for all assets, `MediaUsage::count(MediaAsset $asset)` the count
-for one. Deleting an unused asset also deletes its files.
+for one. Deleting an unused asset also deletes its files. `DeleteMedia` locks the asset row while it counts, deletes the
+rows in a transaction and removes the files only after it commits, so a rolled back delete keeps the files and a
+replacement that runs at the same time cannot leave files behind.
 
 ## Select options
 
