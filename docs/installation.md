@@ -25,7 +25,9 @@ of them the admin needs.
 
 The service provider `J87NL\Cms\CmsServiceProvider` is auto-discovered. The package pulls in
 `tranquil-tools/laravel-form-builder`, which the block types use to describe their fields, and `laravel/mcp` for
-the [MCP tools](mcp-tools.md).
+the [MCP tools](mcp-tools.md). It accepts `laravel/mcp` 0.9.7 and later in 0.9, and 1.1.1 and later: older releases
+lack the security fixes for OAuth dynamic client registration. If Composer keeps an app on an older `laravel/mcp`,
+loosen the app's own constraint and run `composer update laravel/mcp j87nl/laravel-cms -W`.
 
 ## 2. Create the media table
 

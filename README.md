@@ -7,6 +7,7 @@ The admin lives in a separate package, [`j87nl/laravel-vue-cms`](https://github.
 ## Requirements
 
 - PHP 8.5 and Laravel 13
+- `laravel/mcp` 0.9.7 or later in 0.9, or 1.1.1 or later (installed as a dependency); older releases miss security fixes
 - `spatie/laravel-medialibrary` 11 (installed as a dependency) with its `media` table
 - A queue worker for the WebP conversions, and the scheduler for planned publishing
 

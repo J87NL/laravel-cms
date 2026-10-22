@@ -12,6 +12,15 @@ vendor/bin/pest
 The tests use an in-memory SQLite database and need the GD extension, because they upload real images. They run the
 media library's `media` migration and the Testbench `users` migration next to the package's own migrations.
 
+CI runs the suite once on `laravel/mcp` 0.9 and once on 1.x. To do the same locally:
+
+```bash
+composer update --with "laravel/mcp:^0.9.7"
+vendor/bin/pest
+composer update --with "laravel/mcp:^1.1.1"
+vendor/bin/pest
+```
+
 ## Testing your app
 
 Create content with the [actions](actions.md), so paths, revisions and redirects are set up as in production:

@@ -4,6 +4,10 @@ All notable changes to this package are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Security
+
+- Require a `laravel/mcp` release with the fixes of 2026-10-21: `^0.9.7|^1.1.1` instead of `^0.7`. Those releases limit dynamic client registration to 10 redirect URIs of at most 1024 characters each, and check that a resource advertises the OAuth metadata a caller supplies. The 0.7 and 0.8 lines got no fix, so an app that requires this package can no longer stay on them. The package code works unchanged on both lines.
+
 ## [0.3.0] - 2026-10-22
 
 ### Added
