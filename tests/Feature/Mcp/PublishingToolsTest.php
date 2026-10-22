@@ -689,6 +689,47 @@ it('lets the draft tools change and remove a block added live after the pending 
         ]);
 });
 
+it('publishes a block added live after a pending reorder where page_get shows it', function (): void {
+    makePage(['title' => 'Home', 'slug' => 'home'], home: true);
+    $page = makePage(['title' => 'Live', 'slug' => 'live']);
+    $first = addBlock($page, 'rich_text', ['html' => '<p>A</p>']);
+    $second = addBlock($page, 'rich_text', ['html' => '<p>B</p>']);
+
+    foreach (['<p>P</p>', '<p>Q</p>'] as $html) {
+        CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+            ->tool(BlockAddTool::class, ['page_id' => $page->id, 'type' => 'rich_text', 'data' => ['html' => $html]])
+            ->assertOk();
+    }
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(BlocksReorderTool::class, ['page_id' => $page->id, 'block_ids' => [-1, -2, $first->id, $second->id]])
+        ->assertOk();
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(BlockAddLiveTool::class, ['page_id' => $page->id, 'type' => 'rich_text', 'data' => ['html' => '<p>X</p>']])
+        ->assertOk();
+
+    $expected = [
+        '<p>P</p>',
+        '<p>Q</p>',
+        '<p>A</p>',
+        '<p>X</p>',
+        '<p>B</p>',
+    ];
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::PagesEdit))
+        ->tool(PageGetTool::class, ['page_id' => $page->id])
+        ->assertStructuredContent(fn (AssertableJson $json): AssertableJson => $json
+            ->where('pending_revision.blocks', fn (mixed $blocks): bool => collect($blocks)->pluck('data.html')->all() === $expected)
+            ->etc());
+
+    CmsTestServer::actingAs(publisher())
+        ->tool(PagePublishTool::class, ['page_id' => $page->id])
+        ->assertOk();
+
+    expect(array_map(fn (array $block): mixed => $block[1], liveBlockSummary($page)))->toBe($expected);
+});
+
 it('keeps no pending revision for a draft that changes nothing', function (): void {
     $page = makePage(['title' => 'Live']);
     $first = addBlock($page, 'rich_text', ['html' => '<p>1</p>']);

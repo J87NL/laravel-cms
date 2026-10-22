@@ -20,12 +20,14 @@ class PendingRevisionApplier
         private readonly SavePage $savePage,
         private readonly RestoreRevision $restoreRevision,
         private readonly RecordRevision $recordRevision,
+        private readonly PendingRevisionEditor $pendingRevisionEditor,
     ) {}
 
     public function apply(Page $page, Revision $revision, bool $withPath = true): void
     {
-        $content = PendingRevisionEditor::content($revision->snapshot);
-        $base = PendingRevisionEditor::base($revision->snapshot) ?? $this->recordRevision->snapshot($page);
+        $snapshot = $this->pendingRevisionEditor->withLiveBlocks($page, $revision->snapshot);
+        $content = PendingRevisionEditor::content($snapshot);
+        $base = PendingRevisionEditor::base($snapshot) ?? $this->recordRevision->snapshot($page);
         $pendingPage = $withPath ? $content['page'] : Arr::except($content['page'], [
             'slug',
             'parent_id',
