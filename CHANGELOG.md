@@ -13,6 +13,16 @@ All notable changes to this package are documented here. The format follows [Kee
 - `page_get` (and the other tools that return a page) adds `pending_revision.changes`: a short summary of what publishing would change (fields with their live and pending value, and the added, removed, changed and moved blocks with the changed data keys, the keys whose markup alone changed and the changed link targets).
 - `J87NL\Cms\Html\PlainText` turns rich text into plain text (`AbstractBlockType::plain()` uses it) and lists the `href`, `src` and `srcset` values in HTML, read with the HTML5 parser (`PlainText::links()`).
 
+## [0.3.1] - 2026-10-23
+
+### Security
+
+- Require a `laravel/mcp` release with the fixes of 2026-10-21: `^0.9.7|^1.1.1` instead of `^0.7`. Those releases limit dynamic client registration to 10 redirect URIs of at most 1024 characters each, and check that a resource advertises the OAuth metadata a caller supplies. The 0.7 and 0.8 lines got no fix, so an app that requires this package can no longer stay on them. The package code works unchanged on both lines.
+
+### Upgrade notes
+
+- `laravel/mcp` moves from 0.7 to 0.9 or 1.x. Run `composer update j87nl/laravel-cms laravel/mcp -W`: a plain `composer update j87nl/laravel-cms` keeps an app on 0.3.0. An app with its own MCP servers, tools or OAuth routes should check the `laravel/mcp` upgrade notes for 0.8, 0.9 and 1.0 before it updates.
+
 ## [0.3.0] - 2026-10-22
 
 ### Added
@@ -108,7 +118,8 @@ First release, extracted from the j87.nl app.
 
 - Require `symfony/html-sanitizer` `^7.4.13|^8.0.13` for CVE-2026-45064, CVE-2026-45066, CVE-2026-45753, CVE-2026-48760 and CVE-2026-48761.
 
-[Unreleased]: https://github.com/J87NL/laravel-cms/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/J87NL/laravel-cms/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/J87NL/laravel-cms/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/J87NL/laravel-cms/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/J87NL/laravel-cms/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/J87NL/laravel-cms/compare/v0.2.0...v0.2.1

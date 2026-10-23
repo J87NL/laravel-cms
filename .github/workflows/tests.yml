@@ -5,8 +5,14 @@ on:
   pull_request:
 jobs:
   test:
-    name: Pest
+    name: Pest (laravel/mcp ${{ matrix.mcp }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mcp:
+          - '^0.9.7'
+          - '^1.1.1'
     steps:
       - uses: actions/checkout@v7
       - name: Setup PHP
@@ -16,6 +22,6 @@ jobs:
           extensions: mbstring, intl, gd, zip, pdo_sqlite
           coverage: none
       - name: Composer install
-        run: composer update --no-interaction --prefer-dist --ansi
+        run: composer update --no-interaction --prefer-dist --ansi --with "laravel/mcp:${{ matrix.mcp }}"
       - name: Test
         run: vendor/bin/pest
