@@ -327,8 +327,8 @@ it('summarises in page_get what publishing the pending revision would change', f
                         'link_changes' => [
                             [
                                 'key' => 'html',
-                                'live' => [],
-                                'pending' => ['https://evil.example'],
+                                'added' => ['https://evil.example'],
+                                'removed' => [],
                             ],
                         ],
                         'visibility_changed' => false,

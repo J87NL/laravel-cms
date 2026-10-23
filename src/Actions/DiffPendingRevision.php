@@ -43,7 +43,7 @@ class DiffPendingRevision
     {
         $revision ??= $this->pending->find($page);
 
-        if (is_null($revision)) {
+        if (is_null($revision) || ! $revision->is_pending || $revision->page_id !== $page->id) {
             return null;
         }
 

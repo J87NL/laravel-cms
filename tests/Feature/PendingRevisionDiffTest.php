@@ -45,6 +45,24 @@ test('a page without a pending revision has no diff', function (): void {
     expect(pendingDiff($page))->toBeNull();
 });
 
+test('a revision that is not the pending revision of the page has no diff', function (): void {
+    $page = makePage(['title' => 'Live']);
+    $other = makePage(['title' => 'Ander', 'slug' => 'ander']);
+
+    pendingEditor()->updatePage($other, [
+        'title' => 'Nieuw',
+    ], null);
+
+    $foreign = $other->pendingRevision;
+    $history = $page->revisions()->create([
+        'snapshot' => $foreign->snapshot,
+        'is_pending' => false,
+    ]);
+
+    expect(app(DiffPendingRevision::class)->handle($page, $foreign))->toBeNull()
+        ->and(app(DiffPendingRevision::class)->handle($page, $history))->toBeNull();
+});
+
 test('the diff lists the changed page fields with their live and pending value', function (): void {
     $page = makePage(['title' => 'Live', 'meta_description' => 'Oud']);
 

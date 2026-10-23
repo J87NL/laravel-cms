@@ -145,8 +145,8 @@ class CmsPresenter
             'markup_only_keys' => array_values(array_column(array_filter($changes, fn (array $change): bool => $change['markup_changed']), 'key')),
             'link_changes' => array_values(array_map(fn (array $change): array => [
                 'key' => $change['key'],
-                'live' => $change['links']['before'] ?? [],
-                'pending' => $change['links']['after'] ?? [],
+                'added' => array_values(array_unique(array_diff($change['links']['after'] ?? [], $change['links']['before'] ?? []))),
+                'removed' => array_values(array_unique(array_diff($change['links']['before'] ?? [], $change['links']['after'] ?? []))),
             ], array_filter($changes, fn (array $change): bool => ! is_null($change['links'])))),
             'visibility_changed' => $block['status'] === DiffPendingRevision::CHANGED && $block['visible']['before'] !== $block['visible']['after'],
         ];

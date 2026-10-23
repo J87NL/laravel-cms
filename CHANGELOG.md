@@ -13,6 +13,10 @@ All notable changes to this package are documented here. The format follows [Kee
 - `page_get` (and the other tools that return a page) adds `pending_revision.changes`: a short summary of what publishing would change (fields with their live and pending value, and the added, removed, changed and moved blocks with the changed data keys, the keys whose markup alone changed and the changed link targets).
 - `J87NL\Cms\Html\PlainText` turns rich text into plain text (`AbstractBlockType::plain()` uses it) and lists the `href`, `src` and `srcset` values in HTML, read with the HTML5 parser (`PlainText::links()`).
 
+### Changed
+
+- The block renderer and the SEO tags use the page's `blocks` relation when it is already loaded instead of querying the visible blocks again (`Page::visibleBlocks()`). An app that eager-loads `blocks` with constraints of its own now renders the visible blocks among those.
+
 ## [0.3.1] - 2026-10-23
 
 ### Security

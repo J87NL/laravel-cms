@@ -92,7 +92,7 @@ a `ValidationException`. Images used in a pending revision count as in use (see 
 use J87NL\Cms\Actions\DiffPendingRevision;
 
 $diff = app(DiffPendingRevision::class)->handle($page); // null without a pending revision
-$diff = app(DiffPendingRevision::class)->handle($page, $revision, withWords: false);
+$diff = app(DiffPendingRevision::class)->handle($page, $revision, withWords: false); // null unless $revision is the pending revision of $page
 ```
 
 The diff compares the live page with the page as publishing would leave it (`PendingRevisionApplier::plan()`), so it
@@ -116,6 +116,9 @@ when you do not need the word-level diffs (the MCP summary does this); `words` i
   changed), and `links` holds the `href`, `src` and `srcset` values, in document order, as `before` and `after` lists
   when they differ (otherwise `null`). They are read with the HTML5 parser (`PlainText::links()`), so text that only
   looks like an attribute is ignored. Values that are not HTML have `markup_changed` `false` and `links` `null`;
+- every `before`, `after`, `words` text and `links` value is unescaped plain text: HTML entities are decoded, so a
+  value can hold `<script>` or a `javascript:` URL. Render them as text only, never as HTML and never as a clickable
+  link;
 - `summary`: the number of changed `fields` and of `added`, `removed`, `changed` and `moved` blocks, and `reordered`.
 
 `J87NL\Cms\Pages\WordDiff::words(string $before, string $after)` makes the word-level diff. It compares words after
