@@ -10,6 +10,7 @@ The package registers these routes from its service provider, unless `cms.routes
 | Method | URI | Name | Middleware |
 |---|---|---|---|
 | `GET` | `/cms/preview/{page}` | `cms.preview` | `signed` |
+| `GET` | `/cms/preview/{page}/pending/{revision}` | `cms.preview.pending` | `cms.preview.pending_middleware`, `can:cms.pages.edit`, `signed` |
 | `POST` | `/cms/contact/{block}` | `cms.contact` | `throttle:30,1` |
 | `GET` | `/sitemap.xml` | `cms.sitemap` | page cache |
 | `GET` | `/robots.txt` | `cms.robots` | page cache |
@@ -114,5 +115,6 @@ Override a string in `lang/vendor/cms/{locale}/{file}.php` of your app.
 ## Rendering blocks yourself
 
 `J87NL\Cms\Rendering\BlockRenderer::render(Page $page)` returns the visible blocks of a page as a list of
-`HtmlString`. Blocks of an unknown or disabled type are skipped. `J87NL\Cms\Rendering\PageResponse::make(Page $page,
+`HtmlString`. It reads them through `Page::visibleBlocks()`, so a page whose `blocks` relation is loaded (as in the
+[pending revision preview](previews.md#previewing-a-pending-revision)) renders those blocks instead of the stored ones. Blocks of an unknown or disabled type are skipped. `J87NL\Cms\Rendering\PageResponse::make(Page $page,
 bool $preview = false)` returns the full page response that the controllers use.

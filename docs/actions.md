@@ -30,6 +30,7 @@ of the revision and may be `null`.
 | `ChangePageStatus` | `handle(Page $page, PageStatus $status, ?int $userId): void` | Yes |
 | `PublishPage` | `handle(Page $page, ?int $userId): void` | Yes |
 | `DiscardPendingRevision` | `handle(Page $page): bool` | No |
+| `DiffPendingRevision` | `handle(Page $page, ?Revision $revision = null, bool $withWords = true): ?array` | No |
 | `MakeHomePage` | `handle(Page $page): void` | No |
 | `SchedulePage` | `handle(Page $page, ?Carbon $publishAt, ?Carbon $unpublishAt): void` | No |
 | `DeletePage` | `handle(Page $page): void` | No |
@@ -42,7 +43,8 @@ Helpers for an admin that wants to disable a button beforehand:
 
 `PublishPage` applies the page's pending revision and publishes the page when it is not published yet, see
 [Pending revisions](revisions.md#pending-revisions). `DiscardPendingRevision` returns `false` when there was no pending
-revision. `ChangePageStatus::applyLocked(Page $locked, PageStatus $status, ?int $userId)` changes the status of a page
+revision. `DiffPendingRevision` returns what publishing the pending revision would change, or `null` without one, see
+[Comparing a pending revision](revisions.md#comparing-a-pending-revision-with-the-live-page). `ChangePageStatus::applyLocked(Page $locked, PageStatus $status, ?int $userId)` changes the status of a page
 whose row the caller has already locked, inside the caller's transaction and home page lock.
 
 `SavePage::apply(Page $page, array $attributes): void` saves without recording a revision. `MovePage` takes

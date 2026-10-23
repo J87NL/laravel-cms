@@ -25,3 +25,39 @@ The page renders in your layout, with its blocks, exactly like the public page, 
 - the response is never stored in the [page cache](page-cache.md).
 
 Hidden blocks are not shown in a preview either.
+
+## Previewing a pending revision
+
+A published page can have a pending revision (see [Pending revisions](revisions.md#pending-revisions)). Its preview
+shows the page as it would look after publishing it:
+
+```php
+use J87NL\Cms\Http\Controllers\PreviewController;
+
+$revision = $page->pendingRevision;
+
+if (! is_null($revision)) {
+    $url = PreviewController::pendingUrl($page, $revision);
+}
+```
+
+`PreviewController::pendingUrl(Page $page, Revision $revision): string` returns a temporary signed URL for the route
+`cms.preview.pending` (`GET /cms/preview/{page}/pending/{revision}`), valid for `cms.preview.minutes` minutes like the
+draft preview. The response has the same `noindex` headers and meta tag and is never cached.
+
+Unlike the draft preview, the link alone is not enough:
+
+- the route runs `cms.preview.pending_middleware` (default `web` and `auth`), then `can:cms.pages.edit`, then
+  `signed`. A guest is sent to the login page (or gets a 401 for JSON), a user without `cms.pages.edit` gets a 403.
+  The redirect needs a route named `login` or a `redirectGuestsTo()` setting in `bootstrap/app.php`, as Fortify and
+  Breeze apps have; without either, a guest gets a 500 error instead (still without seeing the page);
+- the revision id is part of the signature. When it is no longer the page's pending revision (published, discarded,
+  or replaced by a newer one) the link answers 404, so it never shows changes made after it was handed out.
+
+The preview applies the pending revision in memory, in the same way as publishing does
+(`PendingRevisionApplier::plan()`), so changes made on the live page that the pending revision left alone are shown
+too. Nothing is written to the database. Blocks added in the
+pending revision do not exist yet, so a contact form among them cannot be sent from the preview.
+
+The block renderer and the SEO tags read the blocks through `Page::visibleBlocks()`, which uses the page's loaded
+`blocks` relation when it is loaded. A layout that renders blocks itself should do the same to show the pending blocks.

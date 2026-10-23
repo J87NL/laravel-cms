@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
+use J87NL\Cms\CmsPermission;
 use J87NL\Cms\Http\Controllers\ContactFormController;
 use J87NL\Cms\Http\Controllers\FindabilityController;
 use J87NL\Cms\Http\Controllers\PreviewController;
@@ -17,6 +18,17 @@ Route::middleware([
     Route::get('cms/preview/{page}', [PreviewController::class, 'show'])
         ->middleware('signed')
         ->name(PreviewController::ROUTE);
+
+    Route::get('cms/preview/{page}/pending/{revision}', [PreviewController::class, 'pending'])
+        ->middleware([
+            ...config('cms.preview.pending_middleware', [
+                'web',
+                'auth',
+            ]),
+            sprintf('can:%s', CmsPermission::PagesEdit->value),
+            'signed',
+        ])
+        ->name(PreviewController::PENDING_ROUTE);
 
     Route::post('cms/contact/{block}', [ContactFormController::class, 'store'])
         ->middleware('throttle:30,1')

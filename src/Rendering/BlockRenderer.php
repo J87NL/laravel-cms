@@ -27,12 +27,7 @@ class BlockRenderer
      */
     public function render(Page $page): array
     {
-        $blocks = Block::query()
-            ->where('page_id', $page->id)
-            ->where('is_visible', true)
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get();
+        $blocks = $page->visibleBlocks();
 
         $renderable = [];
         $mediaIds = [];

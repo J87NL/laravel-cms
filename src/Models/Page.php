@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace J87NL\Cms\Models;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -121,6 +122,35 @@ class Page extends Model
         return $this->hasMany(Block::class)
             ->orderBy('sort_order')
             ->orderBy('id');
+    }
+
+    /**
+     * @return Collection<int, Block>
+     */
+    public function visibleBlocks(): Collection
+    {
+        if ($this->relationLoaded('blocks')) {
+            return $this->blocks
+                ->where('is_visible', true)
+                ->sortBy([
+                    [
+                        'sort_order',
+                        'asc',
+                    ],
+                    [
+                        'id',
+                        'asc',
+                    ],
+                ])
+                ->values();
+        }
+
+        return Block::query()
+            ->where('page_id', $this->id)
+            ->where('is_visible', true)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
     }
 
     /**

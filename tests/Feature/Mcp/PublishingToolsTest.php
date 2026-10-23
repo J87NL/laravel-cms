@@ -283,6 +283,82 @@ it('shows the pending revision in page_get and pages_list', function (): void {
             ->etc());
 });
 
+it('summarises in page_get what publishing the pending revision would change', function (): void {
+    $page = makePage(['title' => 'Live']);
+    $first = addBlock($page, 'rich_text', ['html' => '<p>Een</p>']);
+    $removed = addBlock($page, 'rich_text', ['html' => '<p>Twee</p>']);
+    $editor = cmsUser(CmsPermission::PagesEdit);
+
+    CmsTestServer::actingAs($editor)
+        ->tool(PageUpdateTool::class, ['page_id' => $page->id, 'title' => 'Voorstel'])
+        ->assertOk();
+
+    CmsTestServer::actingAs($editor)
+        ->tool(BlockUpdateTool::class, ['block_id' => $first->id, 'data' => ['html' => '<p><a href="https://evil.example">Een</a></p>']])
+        ->assertOk();
+
+    CmsTestServer::actingAs($editor)
+        ->tool(BlockRemoveTool::class, ['block_id' => $removed->id])
+        ->assertOk();
+
+    CmsTestServer::actingAs($editor)
+        ->tool(BlockAddTool::class, ['page_id' => $page->id, 'type' => 'rich_text', 'data' => ['html' => '<p>Drie</p>']])
+        ->assertOk();
+
+    CmsTestServer::actingAs($editor)
+        ->tool(PageGetTool::class, ['page_id' => $page->id])
+        ->assertStructuredContent(fn (AssertableJson $json): AssertableJson => $json
+            ->where('pending_revision.changes', [
+                'fields' => [
+                    [
+                        'field' => 'title',
+                        'live' => 'Live',
+                        'pending' => 'Voorstel',
+                    ],
+                ],
+                'blocks' => [
+                    [
+                        'id' => $first->id,
+                        'type' => 'rich_text',
+                        'change' => 'changed',
+                        'moved' => false,
+                        'changed_keys' => ['html'],
+                        'markup_only_keys' => ['html'],
+                        'link_changes' => [
+                            [
+                                'key' => 'html',
+                                'added' => ['https://evil.example'],
+                                'removed' => [],
+                            ],
+                        ],
+                        'visibility_changed' => false,
+                    ],
+                    [
+                        'id' => $removed->id,
+                        'type' => 'rich_text',
+                        'change' => 'removed',
+                        'moved' => false,
+                        'changed_keys' => [],
+                        'markup_only_keys' => [],
+                        'link_changes' => [],
+                        'visibility_changed' => false,
+                    ],
+                    [
+                        'id' => -1,
+                        'type' => 'rich_text',
+                        'change' => 'added',
+                        'moved' => false,
+                        'changed_keys' => [],
+                        'markup_only_keys' => [],
+                        'link_changes' => [],
+                        'visibility_changed' => false,
+                    ],
+                ],
+                'reordered' => false,
+            ])
+            ->etc());
+});
+
 it('keeps a pending revision off the public page until it is published', function (): void {
     $page = makePage(['title' => 'Live', 'slug' => 'live']);
     $first = addBlock($page, 'rich_text', ['html' => '<p>Oude tekst</p>']);

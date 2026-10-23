@@ -39,6 +39,10 @@ return [
 
     'preview' => [
         'minutes' => 60,
+        'pending_middleware' => [
+            'web',
+            'auth',
+        ],
     ],
 
     'scheduling' => [

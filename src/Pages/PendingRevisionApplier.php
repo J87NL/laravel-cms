@@ -25,6 +25,16 @@ class PendingRevisionApplier
 
     public function apply(Page $page, Revision $revision, bool $withPath = true): void
     {
+        $plan = $this->plan($page, $revision, $withPath);
+
+        $this->applyPage($page, $plan->pageChanges, $withPath);
+        $this->applyBlocks($page, $plan);
+
+        $revision->delete();
+    }
+
+    public function plan(Page $page, Revision $revision, bool $withPath = true): PendingRevisionPlan
+    {
         $snapshot = $this->pendingRevisionEditor->withLiveBlocks($page, $revision->snapshot);
         $content = PendingRevisionEditor::content($snapshot);
         $base = PendingRevisionEditor::base($snapshot) ?? $this->recordRevision->snapshot($page);
@@ -33,17 +43,27 @@ class PendingRevisionApplier
             'parent_id',
         ]);
 
-        $this->applyPage($page, $pendingPage, $base['page'], $withPath);
-        $this->applyBlocks($page, $content['blocks'], $base['blocks']);
+        $live = Block::query()
+            ->where('page_id', $page->id)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->keyBy('id');
 
-        $revision->delete();
+        return $this->planBlocks(
+            $live,
+            $this->pageChanges($page, $pendingPage, $base['page'], $withPath),
+            $content['blocks'],
+            $base['blocks'],
+        );
     }
 
     /**
      * @param  array<string, mixed>  $pending
      * @param  array<string, mixed>  $base
+     * @return array<string, mixed>
      */
-    private function applyPage(Page $page, array $pending, array $base, bool $withPath): void
+    private function pageChanges(Page $page, array $pending, array $base, bool $withPath): array
     {
         $changes = [];
 
@@ -59,6 +79,18 @@ class PendingRevisionApplier
             $changes[$field] = $pending[$field];
         }
 
+        if ($changes === [] || ! $withPath) {
+            return $changes;
+        }
+
+        return $this->restoreRevision->pageAttributes($page, $changes);
+    }
+
+    /**
+     * @param  array<string, mixed>  $changes
+     */
+    private function applyPage(Page $page, array $changes, bool $withPath): void
+    {
         if ($changes === []) {
             return;
         }
@@ -71,108 +103,136 @@ class PendingRevisionApplier
         }
 
         try {
-            $this->savePage->apply($page, $this->restoreRevision->pageAttributes($page, $changes));
+            $this->savePage->apply($page, $changes);
         } catch (UniqueConstraintViolationException) {
             throw SavePage::pathTaken($page);
         }
     }
 
     /**
+     * @param  Collection<int, Block>  $live
+     * @param  array<string, mixed>  $pageChanges
      * @param  list<array<string, mixed>>  $pending
      * @param  list<array<string, mixed>>  $base
      */
-    private function applyBlocks(Page $page, array $pending, array $base): void
+    private function planBlocks(Collection $live, array $pageChanges, array $pending, array $base): PendingRevisionPlan
     {
-        $live = Block::query()
-            ->where('page_id', $page->id)
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get()
-            ->keyBy('id');
-
         $baseById = $this->byId($base);
         $pendingById = $this->byId($pending);
+        $deletedIds = [];
 
-        foreach (array_diff_key($baseById, $pendingById) as $id => $block) {
-            $live->get($id)?->delete();
-            $live->forget($id);
+        foreach (array_keys(array_diff_key($baseById, $pendingById)) as $id) {
+            if ($live->has($id)) {
+                $deletedIds[] = $id;
+            }
         }
 
+        $remaining = $live->filter(fn (Block $block, int $id): bool => ! in_array($id, $deletedIds, true));
         $pendingIds = [];
         $createdIds = [];
+        $writes = [];
 
         foreach ($this->sorted($pending) as $block) {
             $id = (int) ($block['id'] ?? 0);
             $baseBlock = $baseById[$id] ?? null;
-            $liveBlock = $live->get($id);
+            $exists = $remaining->has($id);
 
             if (! is_null($baseBlock) && ! $this->differs($block, $baseBlock)) {
-                if (! is_null($liveBlock)) {
-                    $pendingIds[] = $liveBlock->id;
+                if ($exists) {
+                    $pendingIds[] = $id;
                 }
 
                 continue;
             }
 
-            $saved = $liveBlock ?? new Block;
-
-            $saved->fill([
+            $writes[] = [
+                'id' => $id,
                 'type' => (string) ($block['type'] ?? ''),
                 'data' => is_array($block['data'] ?? null) ? $block['data'] : [],
                 'is_visible' => (bool) ($block['is_visible'] ?? true),
+                'sort_order' => (int) ($block['sort_order'] ?? 0),
+            ];
+            $pendingIds[] = $id;
+
+            if (! $exists) {
+                $createdIds[] = $id;
+            }
+        }
+
+        return new PendingRevisionPlan($pageChanges, $live, $deletedIds, $writes, $this->order($remaining, $pending, $base, $pendingIds, $createdIds));
+    }
+
+    /**
+     * @param  Collection<int, Block>  $remaining
+     * @param  list<array<string, mixed>>  $pending
+     * @param  list<array<string, mixed>>  $base
+     * @param  list<int>  $pendingIds
+     * @param  list<int>  $createdIds
+     * @return list<int>|null
+     */
+    private function order(Collection $remaining, array $pending, array $base, array $pendingIds, array $createdIds): ?array
+    {
+        if ($this->sharedOrder($pending, $base) !== $this->sharedOrder($base, $pending)) {
+            return [
+                ...$pendingIds,
+                ...array_values(array_diff(array_map('intval', $remaining->keys()->all()), $pendingIds)),
+            ];
+        }
+
+        if ($createdIds === []) {
+            return null;
+        }
+
+        return $this->place(array_map('intval', $remaining->keys()->all()), $pendingIds, $createdIds);
+    }
+
+    private function applyBlocks(Page $page, PendingRevisionPlan $plan): void
+    {
+        $live = $plan->live;
+
+        foreach ($plan->deletedIds as $id) {
+            $live->get($id)?->delete();
+            $live->forget($id);
+        }
+
+        $savedIds = [];
+
+        foreach ($plan->writes as $write) {
+            $saved = $live->get($write['id']) ?? new Block;
+
+            $saved->fill([
+                'type' => $write['type'],
+                'data' => $write['data'],
+                'is_visible' => $write['is_visible'],
             ]);
 
-            $created = ! $saved->exists;
-
-            if ($created) {
+            if (! $saved->exists) {
                 $saved->page()->associate($page);
-                $saved->sort_order = (int) ($block['sort_order'] ?? 0);
+                $saved->sort_order = $write['sort_order'];
             }
 
             $saved->save();
 
             $live->put($saved->id, $saved);
-            $pendingIds[] = $saved->id;
-
-            if ($created) {
-                $createdIds[] = $saved->id;
-            }
+            $savedIds[$write['id']] = $saved->id;
         }
 
-        if ($this->sharedOrder($pending, $base) !== $this->sharedOrder($base, $pending)) {
-            $this->reorder($live, $pendingIds);
-
+        if (is_null($plan->order)) {
             return;
         }
 
-        if ($createdIds === []) {
-            return;
-        }
-
-        $this->place($live, $pendingIds, $createdIds);
+        $this->reorder($live, array_map(fn (int $id): int => $savedIds[$id] ?? $id, $plan->order));
     }
 
     /**
-     * @param  Collection<int, Block>  $live
+     * @param  list<int>  $liveIds
      * @param  list<int>  $pendingIds
      * @param  list<int>  $createdIds
+     * @return list<int>
      */
-    private function place(Collection $live, array $pendingIds, array $createdIds): void
+    private function place(array $liveIds, array $pendingIds, array $createdIds): array
     {
-        $order = array_values(array_map('intval', $live
-            ->reject(fn (Block $block): bool => in_array($block->id, $createdIds, true))
-            ->sortBy([
-                [
-                    'sort_order',
-                    'asc',
-                ],
-                [
-                    'id',
-                    'asc',
-                ],
-            ])
-            ->keys()
-            ->all()));
+        $order = $liveIds;
 
         foreach ($pendingIds as $index => $id) {
             if (! in_array($id, $createdIds, true)) {
@@ -204,18 +264,18 @@ class PendingRevisionApplier
             array_splice($order, $position, 0, [$id]);
         }
 
-        $this->reorder($live, $order);
+        return array_values($order);
     }
 
     /**
      * @param  Collection<int, Block>  $live
-     * @param  list<int>  $pendingIds
+     * @param  list<int>  $order
      */
-    private function reorder(Collection $live, array $pendingIds): void
+    private function reorder(Collection $live, array $order): void
     {
-        $others = array_values(array_diff(array_map('intval', $live->keys()->all()), $pendingIds));
+        $others = array_values(array_diff(array_map('intval', $live->keys()->all()), $order));
 
-        foreach ([...$pendingIds, ...$others] as $position => $id) {
+        foreach ([...$order, ...$others] as $position => $id) {
             $block = $live->get($id);
 
             if (is_null($block)) {
