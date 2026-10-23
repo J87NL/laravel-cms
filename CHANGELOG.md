@@ -4,6 +4,8 @@ All notable changes to this package are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-23
+
 ### Security
 
 - Require a `laravel/mcp` release with the fixes of 2026-10-21: `^0.9.7|^1.1.1` instead of `^0.7`. Those releases limit dynamic client registration to 10 redirect URIs of at most 1024 characters each, and check that a resource advertises the OAuth metadata a caller supplies. The 0.7 and 0.8 lines got no fix, so an app that requires this package can no longer stay on them. The package code works unchanged on both lines.
@@ -107,7 +109,8 @@ First release, extracted from the j87.nl app.
 
 - Require `symfony/html-sanitizer` `^7.4.13|^8.0.13` for CVE-2026-45064, CVE-2026-45066, CVE-2026-45753, CVE-2026-48760 and CVE-2026-48761.
 
-[Unreleased]: https://github.com/J87NL/laravel-cms/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/J87NL/laravel-cms/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/J87NL/laravel-cms/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/J87NL/laravel-cms/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/J87NL/laravel-cms/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/J87NL/laravel-cms/compare/v0.2.0...v0.2.1
