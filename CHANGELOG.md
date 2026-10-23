@@ -4,6 +4,8 @@ All notable changes to this package are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-23
+
 ### Added
 
 - `DiffPendingRevision::handle(Page $page, ?Revision $revision = null, bool $withWords = true): ?array` returns a structured diff of the pending revision against the live page, as publishing would apply it: changed page fields with their live and pending value, and every block with its status (`added`, `removed`, `changed`, `unchanged`), whether it moved, its position before and after, its visibility before and after, and its changed data values by dot path. Rich text is compared as plain text, and changed text values carry a word-level diff (`J87NL\Cms\Pages\WordDiff`). A rich text change that leaves the text alone is flagged with `markup_changed`, and changed `href`, `src` and `srcset` values are listed under `links`. A removed block is shown after the nearest block before it that did not move, or, when there is none, before the nearest block after it that did not move; when no block stays, the removed blocks come first in their live order.
@@ -122,7 +124,8 @@ First release, extracted from the j87.nl app.
 
 - Require `symfony/html-sanitizer` `^7.4.13|^8.0.13` for CVE-2026-45064, CVE-2026-45066, CVE-2026-45753, CVE-2026-48760 and CVE-2026-48761.
 
-[Unreleased]: https://github.com/J87NL/laravel-cms/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/J87NL/laravel-cms/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/J87NL/laravel-cms/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/J87NL/laravel-cms/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/J87NL/laravel-cms/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/J87NL/laravel-cms/compare/v0.2.1...v0.2.2
