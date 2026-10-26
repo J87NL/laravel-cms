@@ -2,10 +2,16 @@
 
 declare(strict_types=1);
 
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Mail\MailManager;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\RateLimiter;
 use J87NL\Cms\Actions\SaveSiteSettings;
 use J87NL\Cms\Contact\ContactFormGuard;
+use J87NL\Cms\Contact\ContactFormLimiter;
 use J87NL\Cms\Enums\PageStatus;
 use J87NL\Cms\Mail\ContactFormSubmitted;
 use J87NL\Cms\Models\Block;
@@ -103,7 +109,11 @@ test('bots filling the honeypot, posting too fast or forging the token get no ma
 
 test('submissions are rate limited per address', function (): void {
     foreach (range(1, 5) as $attempt) {
-        $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))->assertStatus(303);
+        $submission = contactSubmission($this->block);
+
+        $this->travel($attempt * 61)->seconds();
+
+        $this->post(route('cms.contact', ['block' => $this->block->id]), $submission)->assertStatus(303);
     }
 
     $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))
@@ -295,3 +305,186 @@ test('a resubmit right after an expired or invalid post is accepted', function (
     'expired' => [[]],
     'invalid' => [['email' => 'typo']],
 ]);
+
+test('sent messages are limited per minute per address and block', function (): void {
+    $other = addBlock($this->page, 'contact_form', [
+        'title' => 'Second form',
+    ]);
+
+    foreach (range(1, 3) as $attempt) {
+        $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))->assertStatus(303);
+    }
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))
+        ->assertStatus(429)
+        ->assertHeader('Retry-After')
+        ->assertSee(__('cms::blocks.contact_form.too_fast'));
+
+    $this->post(route('cms.contact', ['block' => $other->id]), contactSubmission($other))->assertStatus(303);
+
+    $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.7'])
+        ->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))
+        ->assertStatus(303);
+
+    $submission = contactSubmission($this->block);
+
+    $this->travel(61)->seconds();
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), $submission)->assertStatus(303);
+
+    Mail::assertQueuedCount(6);
+});
+
+test('rejected and invalid submissions do not count toward the per minute limit', function (): void {
+    foreach (range(1, 3) as $attempt) {
+        $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, [
+            'email' => 'typo',
+        ]))->assertStatus(422);
+    }
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, [
+        'message' => 'https://spam.example',
+    ]))->assertStatus(303);
+
+    foreach (range(1, 3) as $attempt) {
+        $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))->assertStatus(303);
+    }
+
+    Mail::assertQueuedCount(3);
+});
+
+test('an app can replace the named send limiter', function (): void {
+    RateLimiter::for(ContactFormLimiter::NAMED_LIMITER, fn (): Limit => Limit::perHour(1)->by('everyone'));
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))->assertStatus(303);
+
+    $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.7'])
+        ->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))
+        ->assertStatus(429);
+
+    Mail::assertQueuedCount(1);
+});
+
+test('spam content gets the sent redirect but no mail, and the log holds no content', function (string $message): void {
+    config()->set('cms.contact.blocked_keywords', [
+        'Casino',
+    ]);
+
+    Log::spy();
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, [
+        'message' => $message,
+    ]))
+        ->assertStatus(303)
+        ->assertRedirect(sprintf('/contact?verzonden=%1$d#contact-%1$d', $this->block->id));
+
+    Mail::assertNothingOutgoing();
+
+    Log::shouldHaveReceived('info')
+        ->once()
+        ->withArgs(fn (string $text, array $context): bool => $context['block'] === $this->block->id
+            && ! str_contains(json_encode($context), 'example'));
+})->with([
+    'only a link' => ['https://spam.example/offer'],
+    'only links and punctuation' => ['www.spam.example - https://spam.example/x !'],
+    'too many links' => ['See https://a.example and https://b.example and www.c.example'],
+    'a blocked keyword in any case' => ['Win big at our cASINO today'],
+    'links glued together with commas' => ['Hi http://a.example,http://b.example,http://c.example'],
+    'invalid UTF-8' => ["Hello \xC3\x28 there"],
+]);
+
+test('any number of links is sent when the link limit is switched off', function (): void {
+    config()->set('cms.contact.max_links', null);
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, [
+        'message' => 'See https://a.example, https://b.example and https://c.example',
+    ]))->assertStatus(303);
+
+    Mail::assertQueuedCount(1);
+});
+
+test('messages with a few links or without blocked keywords are sent', function (): void {
+    config()->set('cms.contact.blocked_keywords', [
+        'casino',
+    ]);
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, [
+        'message' => 'Is the market on https://www.example.org/markt still on? See http://www.example.net too.',
+    ]))->assertStatus(303);
+
+    Mail::assertQueuedCount(1);
+});
+
+test('spam rejections count toward the hourly address limit', function (): void {
+    foreach (range(1, 5) as $attempt) {
+        $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, [
+            'message' => 'https://spam.example',
+        ]))->assertStatus(303);
+    }
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))->assertStatus(429);
+
+    Mail::assertNothingOutgoing();
+});
+
+test('rspamd rejects by score or action and the composed message reaches it', function (array $answer): void {
+    config()->set('cms.contact.rspamd.url', 'http://127.0.0.1:11333/checkv2');
+
+    Http::fake([
+        '127.0.0.1:11333/*' => Http::response($answer),
+    ]);
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))->assertStatus(303);
+
+    Mail::assertNothingOutgoing();
+
+    Http::assertSent(fn (HttpRequest $request): bool => $request->url() === 'http://127.0.0.1:11333/checkv2'
+        && str_contains($request->body(), 'From: Visitor <visitor@example.org>')
+        && str_contains($request->body(), 'To: contact@j87.nl')
+        && str_contains($request->body(), 'Hello there'));
+})->with([
+    'score at the threshold' => [['score' => 6.0, 'action' => 'add header']],
+    'reject action' => [['score' => 3.0, 'action' => 'reject']],
+]);
+
+test('rspamd below the threshold lets the message through', function (): void {
+    config()->set('cms.contact.rspamd.url', 'http://127.0.0.1:11333/checkv2');
+    config()->set('cms.contact.rspamd.threshold', 8);
+
+    Http::fake([
+        '127.0.0.1:11333/*' => Http::response(['score' => 7.5, 'action' => 'add header']),
+    ]);
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))->assertStatus(303);
+
+    Mail::assertQueuedCount(1);
+});
+
+test('when rspamd fails the message is sent and a warning is logged', function (Closure $answer): void {
+    config()->set('cms.contact.rspamd.url', 'http://127.0.0.1:11333/checkv2');
+
+    Http::fake([
+        '127.0.0.1:11333/*' => $answer(),
+    ]);
+
+    Log::spy();
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))->assertStatus(303);
+
+    Mail::assertQueuedCount(1);
+
+    Log::shouldHaveReceived('warning')->once();
+})->with([
+    'no connection' => [fn () => Http::failedConnection()],
+    'server error' => [fn () => Http::response('oops', 500)],
+    'unexpected answer' => [fn () => Http::response(['error' => 'no message'])],
+]);
+
+test('without an rspamd url nothing is sent to rspamd', function (): void {
+    Http::fake();
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))->assertStatus(303);
+
+    Http::assertNothingSent();
+    Mail::assertQueuedCount(1);
+});

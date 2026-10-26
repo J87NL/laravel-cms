@@ -8,6 +8,7 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use J87NL\Cms\Blocks\BlockRegistry;
 use J87NL\Cms\Blocks\Types\CallToActionBlock;
@@ -22,6 +23,7 @@ use J87NL\Cms\Blocks\Types\TextWithImageBlock;
 use J87NL\Cms\Cache\FlushPageCache;
 use J87NL\Cms\Console\FlushPageCacheCommand;
 use J87NL\Cms\Console\PublishScheduledPages;
+use J87NL\Cms\Contact\ContactFormLimiter;
 use J87NL\Cms\Html\RichTextSanitizer;
 use J87NL\Cms\Mcp\BlockTypeSummary;
 use J87NL\Cms\Models\Block;
@@ -97,6 +99,8 @@ class CmsServiceProvider extends ServiceProvider
         Blade::componentNamespace('J87NL\\Cms\\View\\Components', 'cms');
 
         Page::observe(RecordPathRedirects::class);
+
+        RateLimiter::for(ContactFormLimiter::NAMED_LIMITER, ContactFormLimiter::defaultLimits(...));
 
         foreach (self::CACHED_CONTENT_MODELS as $model) {
             $model::observe(FlushPageCache::class);

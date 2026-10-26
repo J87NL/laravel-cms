@@ -2,7 +2,20 @@
 
 All notable changes to this package are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.5.0] - 2026-10-26
+
+### Added
+
+- A limit on sent contact form messages per IP address per block per minute: `cms.contact.per_minute` (default 3). It is the named rate limiter `cms-contact` (`ContactFormLimiter::NAMED_LIMITER`), which an app can replace with `RateLimiter::for()`. Only queued messages count. Over the limit, the page is shown again with the new text `cms::blocks.contact_form.too_fast`, status `429` and a `Retry-After` header.
+- Spam checks on the message after validation: a message with more than `cms.contact.max_links` links (default 2, `null` for any number), a message that holds nothing but links (`cms.contact.reject_only_links`, default `true`), a message with an entry of `cms.contact.blocked_keywords` (default empty, matched case-insensitively anywhere, also inside words) in the name, address or message, and a message that is not valid UTF-8. Such a message gets the same redirect as a sent one, but no mail is sent, and it counts toward the hourly IP limit, as a bot post does.
+- Optional rspamd scoring: with `cms.contact.rspamd.url` set (env `CMS_CONTACT_RSPAMD_URL`, for example `http://127.0.0.1:11333/checkv2`), the composed mail is posted to rspamd's `checkv2` endpoint with a timeout of `cms.contact.rspamd.timeout` seconds (default 2). The action `reject` or a score of at least `cms.contact.rspamd.threshold` (default 6) rejects the message as spam. When rspamd cannot be reached or gives no score, the message is sent and a warning is logged.
+- Every rejected submission (bot check or spam check) is logged at `info` level with the block id and the reason, without the message, the sender or the IP address.
+
+### Upgrade notes
+
+- No changes are needed: the new keys have defaults. An app with a published `config/cms.php` can copy the new `contact` keys from the package config; without them the defaults apply. Set `CMS_CONTACT_RSPAMD_URL` in `.env` to use rspamd.
+- A visitor can now send at most 3 messages per minute through one contact block. Raise `cms.contact.per_minute`, set it to `0` to switch it off, or replace the `cms-contact` rate limiter to change that.
+- Messages with three or more links are no longer mailed. Set `cms.contact.max_links` to `null` to keep the old behaviour.
 
 ## [0.4.0] - 2026-10-23
 
@@ -124,7 +137,7 @@ First release, extracted from the j87.nl app.
 
 - Require `symfony/html-sanitizer` `^7.4.13|^8.0.13` for CVE-2026-45064, CVE-2026-45066, CVE-2026-45753, CVE-2026-48760 and CVE-2026-48761.
 
-[Unreleased]: https://github.com/J87NL/laravel-cms/compare/v0.4.0...HEAD
+[0.5.0]: https://github.com/J87NL/laravel-cms/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/J87NL/laravel-cms/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/J87NL/laravel-cms/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/J87NL/laravel-cms/compare/v0.2.2...v0.3.0

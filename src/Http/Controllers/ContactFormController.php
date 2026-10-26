@@ -8,12 +8,15 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\MessageBag;
 use J87NL\Cms\Blocks\BlockRegistry;
 use J87NL\Cms\Contact\ContactFormGuard;
 use J87NL\Cms\Contact\ContactFormLimiter;
+use J87NL\Cms\Contact\ContactFormRejection;
+use J87NL\Cms\Contact\ContactFormSpamFilter;
 use J87NL\Cms\Contact\ContactFormState;
 use J87NL\Cms\Contact\ContactFormVerdict;
 use J87NL\Cms\Mail\ContactFormSubmitted;
@@ -30,6 +33,7 @@ class ContactFormController extends Controller
     public function __construct(
         private readonly ContactFormGuard $guard,
         private readonly ContactFormLimiter $limiter,
+        private readonly ContactFormSpamFilter $spamFilter,
         private readonly BlockRegistry $registry,
         private readonly PageVisibility $visibility,
         private readonly PageResponse $pageResponse,
@@ -53,6 +57,12 @@ class ContactFormController extends Controller
             return $this->tooMany($request, $page, $contactBlock, $this->limiter->retryAfterForAddress($request));
         }
 
+        $sendAllowedIn = $this->limiter->secondsUntilSendAllowed($request);
+
+        if (! is_null($sendAllowedIn)) {
+            return $this->tooMany($request, $page, $contactBlock, $sendAllowedIn, __('cms::blocks.contact_form.too_fast'));
+        }
+
         $verdict = $this->guard->verdict($request, $contactBlock->id);
 
         if ($verdict !== ContactFormVerdict::Human) {
@@ -60,6 +70,8 @@ class ContactFormController extends Controller
         }
 
         if ($verdict === ContactFormVerdict::Bot) {
+            $this->logRejection($contactBlock, ContactFormRejection::BotCheck);
+
             return $this->sent($page, $contactBlock);
         }
 
@@ -92,31 +104,51 @@ class ContactFormController extends Controller
             ]), 503);
         }
 
-        if (! $this->limiter->claimOverall()) {
-            return $this->tooMany($request, $page, $contactBlock, $this->limiter->retryAfterOverall());
-        }
-
         $validated = $validator->validated();
 
-        Mail::to($recipient)->queue(new ContactFormSubmitted(
+        $mail = new ContactFormSubmitted(
             senderName: trim((string) $validated['name']),
             senderEmail: trim((string) $validated['email']),
             body: trim((string) $validated['message']),
             siteName: $settings->siteName(),
             pageTitle: $page->title,
             pageUrl: url($page->url()),
-        ));
+        );
+
+        $rejection = $this->spamFilter->rejection($mail, $recipient);
+
+        if (! is_null($rejection)) {
+            $this->limiter->hitAddress($request);
+            $this->logRejection($contactBlock, $rejection);
+
+            return $this->sent($page, $contactBlock);
+        }
+
+        if (! $this->limiter->claimOverall()) {
+            return $this->tooMany($request, $page, $contactBlock, $this->limiter->retryAfterOverall());
+        }
+
+        Mail::to($recipient)->queue($mail);
 
         $this->limiter->hitAddress($request);
+        $this->limiter->hitSend($request);
 
         return $this->sent($page, $contactBlock);
     }
 
-    private function tooMany(Request $request, Page $page, Block $block, int $retryAfter): Response
+    private function tooMany(Request $request, Page $page, Block $block, int $retryAfter, ?string $message = null): Response
     {
         return $this->failed($request, $page, $block, new MessageBag([
-            'form' => __('cms::blocks.contact_form.too_many'),
+            'form' => $message ?? __('cms::blocks.contact_form.too_many'),
         ]), 429)->header('Retry-After', (string) $retryAfter);
+    }
+
+    private function logRejection(Block $block, ContactFormRejection $rejection): void
+    {
+        Log::info('The contact form rejected a submission as spam.', [
+            'block' => $block->id,
+            'reason' => $rejection->value,
+        ]);
     }
 
     private function sent(Page $page, Block $block): RedirectResponse

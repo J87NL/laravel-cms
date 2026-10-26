@@ -164,22 +164,38 @@ See [Security](security.md#security-headers).
 ```php
 'contact' => [
     'recipient' => null,
+    'per_minute' => 3,
     'per_hour' => 5,
     'global_per_hour' => 30,
     'min_seconds' => 3,
     'max_seconds' => 172800,
     'sent_query' => 'verzonden',
+    'max_links' => 2,
+    'reject_only_links' => true,
+    'blocked_keywords' => [],
+    'rspamd' => [
+        'url' => env('CMS_CONTACT_RSPAMD_URL'),
+        'timeout' => 2,
+        'threshold' => 6,
+    ],
 ],
 ```
 
 | Key | Default | Purpose |
 |---|---|---|
 | `contact.recipient` | `null` | Fallback address when the site settings have no contact recipient |
+| `contact.per_minute` | `3` | Sent messages per IP address per contact block per minute (the `cms-contact` rate limiter); `0` or `null` switches it off |
 | `contact.per_hour` | `5` | Submissions per IP address per hour |
 | `contact.global_per_hour` | `30` | Mails sent per hour for the whole site |
 | `contact.min_seconds` | `3` | A form posted sooner after rendering counts as a bot |
 | `contact.max_seconds` | `172800` | A form posted later than this after rendering has expired (48 hours): the visitor is asked to send it again |
 | `contact.sent_query` | `'verzonden'` | The query parameter of the address the visitor returns to after sending |
+| `contact.max_links` | `2` | A message with more links counts as spam; `null` allows any number |
+| `contact.reject_only_links` | `true` | A message that holds nothing but links counts as spam |
+| `contact.blocked_keywords` | `[]` | Words or phrases that mark a message as spam, case-insensitive, matched anywhere in name, address and message, also inside words |
+| `contact.rspamd.url` | `env('CMS_CONTACT_RSPAMD_URL')` | The rspamd `checkv2` endpoint, for example `http://127.0.0.1:11333/checkv2`. Empty skips rspamd |
+| `contact.rspamd.timeout` | `2` | Seconds to wait for rspamd |
+| `contact.rspamd.threshold` | `6` | An rspamd score at or above this counts as spam |
 
 See [Contact form](contact-form.md).
 

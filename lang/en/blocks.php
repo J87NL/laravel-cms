@@ -97,6 +97,7 @@ return [
         'expired' => 'The form has expired. Please try again.',
         'unavailable' => 'The form cannot send messages right now. Please try again later.',
         'too_many' => 'Too many messages were sent in the past hour. Please try again later.',
+        'too_fast' => 'You have just sent a few messages. Please wait a moment and try again.',
         'mail_subject' => 'Message via :site: :page',
         'mail_intro' => 'Message from the contact form on :url',
     ],

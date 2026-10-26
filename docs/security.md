@@ -107,7 +107,8 @@ Uploaded images are decoded and encoded again with GD, which drops EXIF data suc
 ## Contact form
 
 The contact form has no CSRF token, because public routes have no session. Instead it uses a honeypot, a signed
-timestamp, a per-IP and a site-wide hourly limit, and a per-minute route throttle. See [Contact form](contact-form.md).
+timestamp, a per-IP and a site-wide hourly limit, a per-IP limit on sent messages per minute, a per-minute route
+throttle, content checks (links and blocked keywords) and optionally rspamd. See [Contact form](contact-form.md).
 
 ## Previews
 

@@ -75,11 +75,20 @@ return [
 
     'contact' => [
         'recipient' => null,
+        'per_minute' => 3,
         'per_hour' => 5,
         'global_per_hour' => 30,
         'min_seconds' => 3,
         'max_seconds' => 172800,
         'sent_query' => 'verzonden',
+        'max_links' => 2,
+        'reject_only_links' => true,
+        'blocked_keywords' => [],
+        'rspamd' => [
+            'url' => env('CMS_CONTACT_RSPAMD_URL'),
+            'timeout' => 2,
+            'threshold' => 6,
+        ],
     ],
 
     'media' => [
