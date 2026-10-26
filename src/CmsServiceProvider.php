@@ -69,7 +69,7 @@ class CmsServiceProvider extends ServiceProvider
 
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__.'/../config/cms.php', 'cms');
+        $this->mergePackageConfig();
 
         $this->app->singleton(RichTextSanitizer::class);
         $this->app->singleton(BlockRegistry::class, function (Application $app): BlockRegistry {
@@ -134,6 +134,39 @@ class CmsServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/../resources/views' => resource_path('views/vendor/cms'),
         ], 'cms-views');
+    }
+
+    private function mergePackageConfig(): void
+    {
+        if ($this->app->configurationIsCached()) {
+            return;
+        }
+
+        $defaults = require __DIR__.'/../config/cms.php';
+
+        $this->app['config']->set('cms', $this->mergeDefaults($defaults, $this->app['config']->get('cms', [])));
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $defaults
+     * @param  array<array-key, mixed>  $values
+     * @return array<array-key, mixed>
+     */
+    private function mergeDefaults(array $defaults, array $values): array
+    {
+        foreach ($values as $key => $value) {
+            $default = $defaults[$key] ?? null;
+
+            if (! is_array($value) || ! is_array($default) || array_is_list($default) || (array_is_list($value) && $value !== [])) {
+                $defaults[$key] = $value;
+
+                continue;
+            }
+
+            $defaults[$key] = $this->mergeDefaults($default, $value);
+        }
+
+        return $defaults;
     }
 
     private function registerPermissions(): void

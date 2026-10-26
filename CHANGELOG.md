@@ -2,6 +2,16 @@
 
 All notable changes to this package are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.5.1] - 2026-10-26
+
+### Fixed
+
+- The package config is now merged into the app's `config/cms.php` recursively, so keys that were added after an app published its config, including nested ones such as `cms.contact.rspamd.url` (env `CMS_CONTACT_RSPAMD_URL`), `cms.contact.per_minute` and `cms.contact.max_links`, get their package default. Until now only the top level was merged, so a published `contact` array replaced the package's whole `contact` array. Every value in the app's config still wins. A list in the app's config (such as `blocked_keywords`) replaces the package's list as a whole.
+
+### Upgrade notes
+
+- No changes are needed. The statement in the 0.5.0 upgrade notes that apps with a published config fall back to the defaults was only true for top-level keys: with 0.5.0, an app with a published `contact` array needed to copy the new `contact` keys, or the nested ones (such as `rspamd.url`) were missing. From 0.5.1 on they are filled in.
+
 ## [0.5.0] - 2026-10-26
 
 ### Added
@@ -137,6 +147,7 @@ First release, extracted from the j87.nl app.
 
 - Require `symfony/html-sanitizer` `^7.4.13|^8.0.13` for CVE-2026-45064, CVE-2026-45066, CVE-2026-45753, CVE-2026-48760 and CVE-2026-48761.
 
+[0.5.1]: https://github.com/J87NL/laravel-cms/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/J87NL/laravel-cms/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/J87NL/laravel-cms/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/J87NL/laravel-cms/compare/v0.3.0...v0.3.1

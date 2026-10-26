@@ -46,7 +46,7 @@ php artisan migrate
 ```
 
 The package loads its own migrations, so `migrate` creates the `cms_*` tables without publishing them. See
-[Configuration](configuration.md) for every config key.
+[Configuration](configuration.md) for every config key. The published file may hold only the keys you change.
 
 Images are stored on the `public` disk by default (`cms.media.disk`). Link it into `public/` so their URLs work:
 

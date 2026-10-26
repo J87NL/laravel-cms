@@ -6,8 +6,14 @@ Publish the config file to change the defaults:
 php artisan vendor:publish --tag=cms-config
 ```
 
-This creates `config/cms.php`. The package reads no environment variables of its own: every value lives in this
+This creates `config/cms.php`. The package reads one environment variable of its own, `CMS_CONTACT_RSPAMD_URL`: every other value lives in this
 file. Use `env()` in your published copy if you want a value per environment.
+
+The package merges its own config into yours recursively: a key that is missing in your published copy, also a nested
+one such as `contact.rspamd.url`, gets the package default, and every value in your copy wins. A list (such as
+`contact.blocked_keywords` or `robots.disallow`) in your copy replaces the package's list as a whole. You only need to
+keep the keys you change; after an upgrade there is no need to copy new keys. The config is not merged when it is
+cached with `php artisan config:cache`, which already holds the merged result.
 
 The package also reads a few Laravel settings: `app.key` (contact form tokens), `app.url` (recognizing full URLs on
 this site in redirects), `app.name` (site name fallback), `app.locale` (language in JSON-LD and `og:locale`),

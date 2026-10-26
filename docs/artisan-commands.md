@@ -32,4 +32,5 @@ does not. Run this command after every deploy. See [Page cache](page-cache.md).
 | `php artisan vendor:publish --tag=cms-config` | `config/cms.php` |
 | `php artisan vendor:publish --tag=cms-views` | The views, to `resources/views/vendor/cms` |
 
-The migrations are loaded from the package and are not published.
+The migrations are loaded from the package and are not published. The published config may hold only the keys you
+change: missing keys, also nested ones, fall back to the package defaults, see [Configuration](configuration.md).
