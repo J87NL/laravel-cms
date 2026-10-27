@@ -161,7 +161,7 @@ Each path becomes a `Disallow:` line under `User-agent: *`. See [robots.txt and 
 | `security_headers.referrer_policy` | `true` | `Referrer-Policy: strict-origin-when-cross-origin` |
 | `security_headers.permissions_policy` | `true` | `Permissions-Policy` that denies camera, microphone, geolocation and interest cohorts |
 | `security_headers.hsts_max_age` | `31536000` | `max-age` of the HSTS header in seconds |
-| `security_headers.csp` | `[]` | Extra sources per CSP directive |
+| `security_headers.csp` | `[]` | Extra sources per CSP directive. Turnstile's host is added by itself on pages with the widget |
 
 See [Security](security.md#security-headers).
 
@@ -184,6 +184,9 @@ See [Security](security.md#security-headers).
         'timeout' => 2,
         'threshold' => 6,
     ],
+    'turnstile' => [
+        'timeout' => 3,
+    ],
 ],
 ```
 
@@ -202,6 +205,7 @@ See [Security](security.md#security-headers).
 | `contact.rspamd.url` | `env('CMS_CONTACT_RSPAMD_URL')` | The rspamd `checkv2` endpoint, for example `http://127.0.0.1:11333/checkv2`. Empty skips rspamd |
 | `contact.rspamd.timeout` | `2` | Seconds to wait for rspamd |
 | `contact.rspamd.threshold` | `6` | An rspamd score at or above this counts as spam |
+| `contact.turnstile.timeout` | `3` | Seconds to wait for Cloudflare's `siteverify`. The Turnstile keys themselves live in the [site settings](site-settings.md) |
 
 See [Contact form](contact-form.md).
 

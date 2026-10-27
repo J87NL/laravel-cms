@@ -23,6 +23,20 @@ class SaveSiteSettings
             $settings->entity_same_as = $this->urls($attributes['entity_same_as']);
         }
 
+        if (array_key_exists(SiteSettings::TURNSTILE_SITE_KEY, $attributes)) {
+            $settings->setAttribute(SiteSettings::TURNSTILE_SITE_KEY, trim((string) $attributes[SiteSettings::TURNSTILE_SITE_KEY]) ?: null);
+        }
+
+        $secret = trim((string) ($attributes[SiteSettings::TURNSTILE_SECRET] ?? ''));
+
+        if ($secret !== '') {
+            $settings->setAttribute(SiteSettings::TURNSTILE_SECRET, $secret);
+        }
+
+        if ($secret === '' && filter_var($attributes[SiteSettings::REMOVE_TURNSTILE_SECRET] ?? false, FILTER_VALIDATE_BOOL)) {
+            $settings->setAttribute(SiteSettings::TURNSTILE_SECRET, null);
+        }
+
         $settings->save();
 
         return $settings;

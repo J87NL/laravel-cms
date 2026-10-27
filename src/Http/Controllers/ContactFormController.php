@@ -19,6 +19,7 @@ use J87NL\Cms\Contact\ContactFormRejection;
 use J87NL\Cms\Contact\ContactFormSpamFilter;
 use J87NL\Cms\Contact\ContactFormState;
 use J87NL\Cms\Contact\ContactFormVerdict;
+use J87NL\Cms\Contact\Turnstile;
 use J87NL\Cms\Mail\ContactFormSubmitted;
 use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\Page;
@@ -34,6 +35,7 @@ class ContactFormController extends Controller
         private readonly ContactFormGuard $guard,
         private readonly ContactFormLimiter $limiter,
         private readonly ContactFormSpamFilter $spamFilter,
+        private readonly Turnstile $turnstile,
         private readonly BlockRegistry $registry,
         private readonly PageVisibility $visibility,
         private readonly PageResponse $pageResponse,
@@ -79,6 +81,13 @@ class ContactFormController extends Controller
             return $this->failed($request, $page, $contactBlock, new MessageBag([
                 'form' => __('cms::blocks.contact_form.expired'),
             ]), 422);
+        }
+
+        if (! $this->turnstile->passes($request)) {
+            $this->limiter->hitAddress($request);
+            $this->logRejection($contactBlock, ContactFormRejection::Turnstile);
+
+            return $this->sent($page, $contactBlock);
         }
 
         $validator = Validator::make($request->only(['name', 'email', 'message']), [

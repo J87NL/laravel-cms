@@ -23,7 +23,9 @@ The cache key is the host and the path. Entries live in `cms.cache.store` (the d
 The [security headers](security.md#security-headers) are added after the cache, so a cached page gets fresh headers.
 
 A cached page with a contact form contains the form token from the moment it was rendered. Keep `cms.cache.ttl` below
-`cms.contact.max_seconds`, see [Contact form](contact-form.md#the-token).
+`cms.contact.max_seconds`, see [Contact form](contact-form.md#the-token). Saving the site settings flushes the cache, so
+switching [Turnstile](contact-form.md#cloudflare-turnstile) on or off there applies at once. An app that serves the
+Turnstile keys from its own settings must flush the cache itself.
 
 ## The X-Cms-Cache header
 

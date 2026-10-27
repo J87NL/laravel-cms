@@ -24,6 +24,8 @@ use J87NL\Cms\Enums\EntityType;
  * @property string|null $robots_extra
  * @property string|null $llms_intro
  * @property string|null $contact_recipient
+ * @property string|null $contact_turnstile_site_key
+ * @property string|null $contact_turnstile_secret_key
  * @property int|null $privacy_page_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -32,6 +34,12 @@ use J87NL\Cms\Enums\EntityType;
 class SiteSettings extends Model
 {
     public const string TITLE_PLACEHOLDER = ':title';
+
+    public const string TURNSTILE_SITE_KEY = 'contact_turnstile_site_key';
+
+    public const string TURNSTILE_SECRET = 'contact_turnstile_secret_key';
+
+    public const string REMOVE_TURNSTILE_SECRET = 'remove_contact_turnstile_secret_key';
 
     /**
      * @var list<string>
@@ -61,6 +69,13 @@ class SiteSettings extends Model
     protected $fillable = self::EDITABLE_ATTRIBUTES;
 
     /**
+     * @var list<string>
+     */
+    protected $hidden = [
+        self::TURNSTILE_SECRET,
+    ];
+
+    /**
      * @var array<string, mixed>
      */
     protected $attributes = [
@@ -78,6 +93,7 @@ class SiteSettings extends Model
             'entity_image_id' => 'integer',
             'og_image_id' => 'integer',
             'privacy_page_id' => 'integer',
+            self::TURNSTILE_SECRET => 'encrypted',
         ];
     }
 
@@ -151,6 +167,11 @@ class SiteSettings extends Model
             array_map('trim', $lines),
             fn (string $line): bool => $line !== '',
         ));
+    }
+
+    public function hasTurnstileSecret(): bool
+    {
+        return filled($this->getRawOriginal(self::TURNSTILE_SECRET));
     }
 
     public function privacyUrl(): ?string

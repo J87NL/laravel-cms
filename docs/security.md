@@ -45,6 +45,10 @@ sources:
 On a page that contains an embed `iframe`, the hosts from `cms.embeds` that the page actually uses are added to
 `frame-src` as `https://{host}`. Other pages keep `frame-src 'none'`.
 
+With [Cloudflare Turnstile](contact-form.md#cloudflare-turnstile) switched on, a page that shows the Turnstile widget
+allows `https://challenges.cloudflare.com` in `script-src` and `frame-src`. That script is the only one a public page
+loads. Other pages keep `script-src 'none'`.
+
 ## Rich text
 
 `J87NL\Cms\Html\RichTextSanitizer` cleans rich text with `symfony/html-sanitizer`, when a block is saved and again when
@@ -108,7 +112,8 @@ Uploaded images are decoded and encoded again with GD, which drops EXIF data suc
 
 The contact form has no CSRF token, because public routes have no session. Instead it uses a honeypot, a signed
 timestamp, a per-IP and a site-wide hourly limit, a per-IP limit on sent messages per minute, a per-minute route
-throttle, content checks (links and blocked keywords) and optionally rspamd. See [Contact form](contact-form.md).
+throttle, content checks (links and blocked keywords), optionally Cloudflare Turnstile and optionally rspamd. See
+[Contact form](contact-form.md).
 
 ## Previews
 

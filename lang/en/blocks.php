@@ -100,6 +100,7 @@ return [
         'too_fast' => 'You have just sent a few messages. Please wait a moment and try again.',
         'mail_subject' => 'Message via :site: :page',
         'mail_intro' => 'Message from the contact form on :url',
+        'turnstile_noscript' => 'This form needs JavaScript to check that you are not a robot.',
     ],
     'link_tiles' => [
         'label' => 'Link tiles',

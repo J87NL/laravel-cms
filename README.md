@@ -53,8 +53,8 @@ Cached public pages are only invalidated by content changes. Run `php artisan cm
 - **Preview:** a signed link, valid for an hour, that renders a draft with `noindex`, and one, for signed-in users with `cms.pages.edit` only, that renders a published page with its pending revision applied.
 - **Pending revision diff:** `DiffPendingRevision` compares a pending revision with the live page (fields, added, removed, changed and moved blocks, word-level text changes, markup-only and link target changes); `page_get` returns a summary of it.
 - **Cache:** anonymous GET responses are cached as full HTML per path and invalidated on every content, menu, media or settings change. Requests with a session cookie or a query string bypass the cache; the `X-Cms-Cache` header says `hit`, `miss` or `bypass`.
-- **Security headers:** a strict Content-Security-Policy (frames only from the embed hosts, on pages with an embed), HSTS on secure requests, `Referrer-Policy` and `X-Content-Type-Options`.
-- **Contact form:** mails the address from the site settings (or `cms.contact.recipient`) with the visitor as Reply-To, protected by a honeypot, a signed timestamp and rate limits instead of CSRF, with spam checks on links and blocked keywords and optional rspamd scoring.
+- **Security headers:** a strict Content-Security-Policy (frames only from the embed hosts, on pages with an embed, and Cloudflare Turnstile's script and frame only on pages with its widget), HSTS on secure requests, `Referrer-Policy` and `X-Content-Type-Options`.
+- **Contact form:** mails the address from the site settings (or `cms.contact.recipient`) with the visitor as Reply-To, protected by a honeypot, a signed timestamp and rate limits instead of CSRF, with spam checks on links and blocked keywords, optional Cloudflare Turnstile (keys in the site settings, the secret encrypted) and optional rspamd scoring.
 
 ## Extending
 
@@ -164,6 +164,7 @@ See [`config/cms.php`](config/cms.php). The most relevant keys:
 | `contact.max_links` | `2` | A message with more links is treated as spam |
 | `contact.blocked_keywords` | `[]` | Words that mark a message as spam |
 | `contact.rspamd.url` | `CMS_CONTACT_RSPAMD_URL` | rspamd `checkv2` endpoint; empty skips rspamd |
+| `contact.turnstile.timeout` | `3` | Seconds to wait for Cloudflare Turnstile; its keys live in the site settings |
 | `blocks.disabled` | `[]` | Block type keys to hide on this site |
 
 ## Testing

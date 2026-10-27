@@ -89,6 +89,9 @@ return [
             'timeout' => 2,
             'threshold' => 6,
         ],
+        'turnstile' => [
+            'timeout' => 3,
+        ],
     ],
 
     'media' => [

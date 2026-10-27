@@ -44,6 +44,18 @@
 
             <input type="hidden" name="{{ \J87NL\Cms\Contact\ContactFormGuard::TIMESTAMP }}" value="{{ $token }}">
 
+            @if ($turnstileSiteKey)
+                <div class="cf-turnstile cms-contact__turnstile" data-sitekey="{{ $turnstileSiteKey }}" data-response-field-name="{{ \J87NL\Cms\Contact\Turnstile::RESPONSE_FIELD }}"></div>
+
+                <noscript>
+                    <p class="cms-contact__noscript">{{ __('cms::blocks.contact_form.turnstile_noscript') }}</p>
+                </noscript>
+
+                @once
+                    <script src="{{ \J87NL\Cms\Contact\Turnstile::SCRIPT_URL }}" async defer></script>
+                @endonce
+            @endif
+
             @if ($privacyUrl)
                 <p class="cms-contact__privacy">
                     {{ __('cms::blocks.contact_form.privacy_before') }}

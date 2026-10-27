@@ -100,6 +100,7 @@ return [
         'too_fast' => 'Je hebt net al een paar berichten verstuurd. Wacht even en probeer het dan nog eens.',
         'mail_subject' => 'Bericht via :site: :page',
         'mail_intro' => 'Bericht via het contactformulier op :url',
+        'turnstile_noscript' => 'Dit formulier heeft JavaScript nodig om te controleren dat je geen robot bent.',
     ],
     'link_tiles' => [
         'label' => 'Linktegels',

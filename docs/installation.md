@@ -124,6 +124,9 @@ site stylesheet must hide it:
 .cms-contact__trap { position: absolute; left: -10000px; }
 ```
 
+To stop bots that run a real browser, switch on [Cloudflare Turnstile](contact-form.md#cloudflare-turnstile) by entering its site key and secret key in
+the site settings.
+
 ## 9. Flush the page cache on deploy
 
 Cached pages are only dropped by content changes. Add this to your deploy script, so a changed layout or view

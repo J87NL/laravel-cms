@@ -5,6 +5,8 @@ declare(strict_types=1);
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Mail\MailManager;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -12,9 +14,12 @@ use Illuminate\Support\Facades\RateLimiter;
 use J87NL\Cms\Actions\SaveSiteSettings;
 use J87NL\Cms\Contact\ContactFormGuard;
 use J87NL\Cms\Contact\ContactFormLimiter;
+use J87NL\Cms\Contact\Turnstile;
+use J87NL\Cms\Contact\TurnstileKeys;
 use J87NL\Cms\Enums\PageStatus;
 use J87NL\Cms\Mail\ContactFormSubmitted;
 use J87NL\Cms\Models\Block;
+use J87NL\Cms\Models\SiteSettings;
 
 beforeEach(function (): void {
     Mail::fake();
@@ -39,6 +44,14 @@ beforeEach(function (): void {
         'title' => 'Mail me',
     ]);
 });
+
+function useTurnstile(?string $siteKey, ?string $secretKey): void
+{
+    app(SaveSiteSettings::class)->handle([
+        'contact_turnstile_site_key' => $siteKey,
+        'contact_turnstile_secret_key' => $secretKey,
+    ]);
+}
 
 /**
  * @return array<string, string>
@@ -482,6 +495,255 @@ test('when rspamd fails the message is sent and a warning is logged', function (
 
 test('without an rspamd url nothing is sent to rspamd', function (): void {
     Http::fake();
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))->assertStatus(303);
+
+    Http::assertNothingSent();
+    Mail::assertQueuedCount(1);
+});
+
+test('without both turnstile keys the form has no widget and needs no token', function (?string $siteKey, ?string $secretKey): void {
+    useTurnstile($siteKey, $secretKey);
+
+    Http::fake();
+
+    $response = $this->get('/contact')
+        ->assertOk()
+        ->assertDontSee('cf-turnstile', false)
+        ->assertDontSee(Turnstile::SCRIPT_URL, false);
+
+    expect($response->headers->get('Content-Security-Policy'))
+        ->toContain("script-src 'none'")
+        ->not->toContain(Turnstile::HOST);
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))->assertStatus(303);
+
+    Http::assertNothingSent();
+    Mail::assertQueuedCount(1);
+})->with([
+    'no keys' => [null, null],
+    'only a site key' => ['site-key', null],
+    'only a secret key' => [null, 'secret-key'],
+    'blank keys' => [' ', ' '],
+]);
+
+test('with turnstile keys the form renders one widget and the policy allows cloudflare', function (): void {
+    useTurnstile('site-key', 'secret-key');
+
+    addBlock($this->page, 'contact_form', [
+        'title' => 'Second form',
+    ]);
+
+    $response = $this->get('/contact')
+        ->assertOk()
+        ->assertSee('data-sitekey="site-key"', false)
+        ->assertDontSee('secret-key');
+
+    expect(substr_count((string) $response->getContent(), 'class="cf-turnstile'))->toBe(2)
+        ->and(substr_count((string) $response->getContent(), Turnstile::SCRIPT_URL))->toBe(1)
+        ->and($response->headers->get('Content-Security-Policy'))
+        ->toContain(sprintf('script-src %s;', Turnstile::HOST))
+        ->toContain(sprintf('frame-src %s', Turnstile::HOST));
+
+    expect($this->get('/privacy')->headers->get('Content-Security-Policy'))
+        ->toContain("script-src 'none'")
+        ->not->toContain(Turnstile::HOST);
+});
+
+test('with turnstile a submission without a token gets the sent redirect but no mail', function (): void {
+    useTurnstile('site-key', 'secret-key');
+    config()->set('cms.contact.rspamd.url', 'http://127.0.0.1:11333/checkv2');
+
+    Http::fake();
+    Log::spy();
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))
+        ->assertStatus(303)
+        ->assertRedirect(sprintf('/contact?verzonden=%1$d#contact-%1$d', $this->block->id));
+
+    Http::assertNothingSent();
+    Mail::assertNothingOutgoing();
+
+    Log::shouldHaveReceived('info')
+        ->once()
+        ->withArgs(fn (string $text, array $context): bool => $context['reason'] === 'turnstile');
+});
+
+test('with turnstile a valid token is verified with cloudflare before rspamd and sent', function (): void {
+    useTurnstile('site-key', 'secret-key');
+
+    Http::fake([
+        'challenges.cloudflare.com/*' => Http::response(['success' => true]),
+    ]);
+
+    $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.9'])
+        ->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, [
+            Turnstile::RESPONSE_FIELD => 'good-token',
+        ]))
+        ->assertStatus(303);
+
+    Mail::assertQueuedCount(1);
+
+    Http::assertSent(fn (HttpRequest $request): bool => $request->url() === Turnstile::VERIFY_URL
+        && $request->isForm()
+        && $request['secret'] === 'secret-key'
+        && $request['response'] === 'good-token'
+        && $request['remoteip'] === '10.0.0.9');
+});
+
+test('with turnstile an invalid token is rejected without asking rspamd and counts toward the hourly limit', function (): void {
+    useTurnstile('site-key', 'secret-key');
+    config()->set('cms.contact.rspamd.url', 'http://127.0.0.1:11333/checkv2');
+
+    Http::fake([
+        'challenges.cloudflare.com/*' => Http::response(['success' => false, 'error-codes' => ['invalid-input-response']]),
+    ]);
+
+    Log::spy();
+
+    foreach (range(1, 5) as $attempt) {
+        $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, [
+            Turnstile::RESPONSE_FIELD => 'bad-token',
+        ]))->assertStatus(303);
+    }
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, [
+        Turnstile::RESPONSE_FIELD => 'bad-token',
+    ]))->assertStatus(429);
+
+    Mail::assertNothingOutgoing();
+
+    Http::assertSentCount(5);
+    Http::assertNotSent(fn (HttpRequest $request): bool => str_contains($request->url(), '11333'));
+
+    Log::shouldHaveReceived('info')
+        ->times(5)
+        ->withArgs(fn (string $text, array $context): bool => $context['reason'] === 'turnstile');
+    Log::shouldNotHaveReceived('warning');
+});
+
+test('a turnstile token longer than the maximum is rejected without asking cloudflare', function (): void {
+    useTurnstile('site-key', 'secret-key');
+
+    Http::fake();
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, [
+        Turnstile::RESPONSE_FIELD => str_repeat('a', Turnstile::MAX_TOKEN_LENGTH + 1),
+    ]))->assertStatus(303);
+
+    Mail::assertNothingOutgoing();
+    Http::assertNothingSent();
+});
+
+test('a refused turnstile secret key accepts the message and logs a warning', function (): void {
+    useTurnstile('site-key', 'wrong-secret');
+
+    Http::fake([
+        'challenges.cloudflare.com/*' => Http::response(['success' => false, 'error-codes' => ['invalid-input-secret']]),
+    ]);
+
+    Log::spy();
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, [
+        Turnstile::RESPONSE_FIELD => 'token',
+    ]))->assertStatus(303);
+
+    Mail::assertQueued(ContactFormSubmitted::class);
+
+    Log::shouldHaveReceived('warning')->once();
+});
+
+test('when cloudflare cannot be reached a token is accepted and a warning is logged', function (Closure $answer): void {
+    useTurnstile('site-key', 'secret-key');
+
+    Http::fake([
+        'challenges.cloudflare.com/*' => $answer(),
+    ]);
+
+    Log::spy();
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, [
+        Turnstile::RESPONSE_FIELD => 'token',
+    ]))->assertStatus(303);
+
+    Mail::assertQueuedCount(1);
+
+    Log::shouldHaveReceived('warning')->once();
+})->with([
+    'no connection' => [fn () => Http::failedConnection()],
+    'server error' => [fn () => Http::response('oops', 502)],
+    'unexpected answer' => [fn () => Http::response(['error' => 'none'])],
+]);
+
+test('an app can serve the turnstile keys from its own binding', function (): void {
+    app()->bind(TurnstileKeys::class, fn (): TurnstileKeys => new class implements TurnstileKeys
+    {
+        public function siteKey(): ?string
+        {
+            return 'settings-site-key';
+        }
+
+        public function secretKey(): ?string
+        {
+            return 'settings-secret-key';
+        }
+    });
+
+    Http::fake([
+        'challenges.cloudflare.com/*' => Http::response(['success' => true]),
+    ]);
+
+    $this->get('/contact')->assertSee('data-sitekey="settings-site-key"', false);
+
+    $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block, [
+        Turnstile::RESPONSE_FIELD => 'token',
+    ]))->assertStatus(303);
+
+    Http::assertSent(fn (HttpRequest $request): bool => $request['secret'] === 'settings-secret-key');
+    Mail::assertQueuedCount(1);
+});
+
+test('the turnstile secret key is stored encrypted, hidden, kept when left empty and cleared on request', function (): void {
+    useTurnstile('site-key', 'secret-key');
+
+    $stored = DB::table('cms_settings')->value('contact_turnstile_secret_key');
+
+    expect($stored)->not->toContain('secret-key')
+        ->and(Crypt::decryptString((string) $stored))->toBe('secret-key')
+        ->and(SiteSettings::current()->toArray())->not->toHaveKey('contact_turnstile_secret_key')
+        ->and(SiteSettings::current()->hasTurnstileSecret())->toBeTrue();
+
+    app(SaveSiteSettings::class)->handle([
+        'contact_turnstile_site_key' => 'new-site-key',
+        'contact_turnstile_secret_key' => null,
+    ]);
+
+    expect(SiteSettings::current())
+        ->contact_turnstile_site_key->toBe('new-site-key')
+        ->contact_turnstile_secret_key->toBe('secret-key');
+
+    app(SaveSiteSettings::class)->handle([
+        'contact_turnstile_secret_key' => null,
+        SiteSettings::REMOVE_TURNSTILE_SECRET => true,
+    ]);
+
+    expect(SiteSettings::current()->hasTurnstileSecret())->toBeFalse();
+
+    $this->get('/contact')->assertDontSee('cf-turnstile', false);
+});
+
+test('a turnstile secret key that cannot be decrypted switches turnstile off', function (): void {
+    useTurnstile('site-key', 'secret-key');
+
+    DB::table('cms_settings')->update([
+        'contact_turnstile_secret_key' => 'not-encrypted',
+    ]);
+
+    Http::fake();
+
+    $this->get('/contact')
+        ->assertOk()
+        ->assertDontSee('cf-turnstile', false);
 
     $this->post(route('cms.contact', ['block' => $this->block->id]), contactSubmission($this->block))->assertStatus(303);
 

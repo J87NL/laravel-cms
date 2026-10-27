@@ -23,6 +23,11 @@ Editors change the settings in the admin of `j87nl/laravel-vue-cms`. Its form ad
 | `robots_extra` | Extra lines for `robots.txt` |
 | `llms_intro` | Introduction for `llms.txt`. Falls back to the default meta description |
 | `contact_recipient` | Address the contact form mails to. Falls back to `cms.contact.recipient` |
+| `contact_turnstile_site_key` | The Cloudflare Turnstile site key of the contact form, see [Contact form](contact-form.md#cloudflare-turnstile) |
+| `contact_turnstile_secret_key` | The Cloudflare Turnstile secret key. Stored encrypted with `app.key` and hidden from `toArray()` and JSON |
+
+The two Turnstile keys are not in `EDITABLE_ATTRIBUTES`, so a form for the other settings never sends or overwrites
+them.
 | `privacy_page_id` | The privacy statement page, linked below the contact form while it is published |
 
 ## Saving
@@ -43,6 +48,14 @@ app(SaveSiteSettings::class)->handle([
 and saves the row. `entity_same_as` accepts a list or a string with one URL per line. Empty lines are skipped,
 duplicates removed, and a value that is not a full `http(s)://` URL throws a `ValidationException`.
 
+The Turnstile keys have their own rules, so a form never has to send the secret back:
+
+- `contact_turnstile_site_key`, when present, is trimmed and stored, an empty value as `null`;
+- a non-empty `contact_turnstile_secret_key` replaces the stored secret;
+- an empty or missing one keeps the stored secret;
+- `remove_contact_turnstile_secret_key` (`SiteSettings::REMOVE_TURNSTILE_SECRET`) set to `true`, with an empty secret,
+  clears it.
+
 The other fields are not validated by the action. Validate them in your request.
 
 ## Helpers
@@ -55,6 +68,7 @@ The other fields are not validated by the action. Validate them in your request.
 | `sameAs()` | The profile URLs, trimmed, without empty values |
 | `robotsLines()` | The non-empty lines of `robots_extra` |
 | `privacyUrl()` | The URL of the privacy page while it is published, otherwise `null` |
+| `hasTurnstileSecret()` | Whether a Turnstile secret key is stored, without decrypting it |
 
 ## Title pattern
 

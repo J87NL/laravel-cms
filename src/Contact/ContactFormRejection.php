@@ -7,6 +7,7 @@ namespace J87NL\Cms\Contact;
 enum ContactFormRejection: string
 {
     case BotCheck = 'bot_check';
+    case Turnstile = 'turnstile';
     case InvalidEncoding = 'invalid_encoding';
     case OnlyLinks = 'only_links';
     case TooManyLinks = 'too_many_links';

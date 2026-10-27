@@ -10,6 +10,7 @@ use J87NL\Cms\Blocks\AbstractBlockType;
 use J87NL\Cms\Blocks\BlockContext;
 use J87NL\Cms\Contact\ContactFormGuard;
 use J87NL\Cms\Contact\ContactFormState;
+use J87NL\Cms\Contact\Turnstile;
 use J87NL\Cms\Models\SiteSettings;
 use TranquilTools\FormBuilder\Fields\Text;
 use TranquilTools\FormBuilder\Fields\Textarea;
@@ -97,6 +98,7 @@ class ContactFormBlock extends AbstractBlockType
             'errors' => $state->errors ?? new MessageBag,
             'old' => $state->old ?? [],
             'privacyUrl' => SiteSettings::current()->privacyUrl(),
+            'turnstileSiteKey' => app(Turnstile::class)->siteKey(),
         ];
     }
 

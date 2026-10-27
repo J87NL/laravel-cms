@@ -24,6 +24,8 @@ use J87NL\Cms\Cache\FlushPageCache;
 use J87NL\Cms\Console\FlushPageCacheCommand;
 use J87NL\Cms\Console\PublishScheduledPages;
 use J87NL\Cms\Contact\ContactFormLimiter;
+use J87NL\Cms\Contact\SiteSettingsTurnstileKeys;
+use J87NL\Cms\Contact\TurnstileKeys;
 use J87NL\Cms\Html\RichTextSanitizer;
 use J87NL\Cms\Mcp\BlockTypeSummary;
 use J87NL\Cms\Models\Block;
@@ -86,6 +88,7 @@ class CmsServiceProvider extends ServiceProvider
         $this->app->singleton(RecordPathRedirects::class);
         $this->app->singleton(FlushPageCache::class);
         $this->app->scoped(BlockTypeSummary::class);
+        $this->app->bindIf(TurnstileKeys::class, SiteSettingsTurnstileKeys::class);
 
         $this->registerPermissions();
     }

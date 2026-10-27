@@ -3,7 +3,7 @@
 The `contact_form` block renders a form with name, email address and message. A submission is mailed to the site
 owner, with the visitor as `Reply-To`. The form works without JavaScript, cookies or a session, so it has no CSRF
 token. It is protected by a honeypot, a signed timestamp and rate limits instead, and the message itself is checked
-for spam.
+for spam. Optionally, [Cloudflare Turnstile](#cloudflare-turnstile) adds a bot check that does need JavaScript.
 
 ## Setup
 
@@ -47,22 +47,25 @@ handles it in this order:
    `cms::blocks.contact_form.expired`, the entered values and a fresh token, status `422`. It counts toward the IP
    limit, and no mail is sent. A page shown again after an error carries a token that is already
    `cms.contact.min_seconds` old, so the visitor can send it again at once.
-6. Validation: `name` (at most 120 characters), `email` (a valid address, at most 254 characters) and `message` (at
+6. With [Cloudflare Turnstile](#cloudflare-turnstile) switched on, the Turnstile token must be present and accepted by
+   Cloudflare. A submission that fails counts toward the IP limit and gets the same redirect as a sent message, but no
+   mail is sent.
+7. Validation: `name` (at most 120 characters), `email` (a valid address, at most 254 characters) and `message` (at
    most 5,000 characters) are required. On failure the page is shown again with the errors and the entered values,
    status `422`. Failed validation does not count toward the IP limit.
-7. Without a recipient, the page is shown again with an error, status `503`.
-8. The spam checks, see [Spam checks](#spam-checks). A message that fails them counts toward the IP limit and gets the
+8. Without a recipient, the page is shown again with an error, status `503`.
+9. The spam checks, see [Spam checks](#spam-checks). A message that fails them counts toward the IP limit and gets the
    same redirect as a sent message, but no mail is sent.
-9. When the site has sent `cms.contact.global_per_hour` mails in the past hour, the page is shown again with an
-   error, status `429`.
-10. The mail is queued, the submission counts toward the IP limit and the per-minute limit, and the visitor is
+10. When the site has sent `cms.contact.global_per_hour` mails in the past hour, the page is shown again with an
+    error, status `429`.
+11. The mail is queued, the submission counts toward the IP limit and the per-minute limit, and the visitor is
     redirected (`303`) to `{page}?verzonden={block id}#contact-{block id}`, where the block shows the success message.
     Set `cms.contact.sent_query` to use another name than `verzonden` for that query parameter.
 
 The route also has `throttle:30,1`, which limits all posts to this route to 30 per minute per IP address.
 
-Every rejected submission (bot check or spam check) is logged at `info` level with the block id and the reason
-(`bot_check`, `invalid_encoding`, `only_links`, `too_many_links`, `blocked_keyword` or `rspamd`), without the name,
+Every rejected submission (bot check, Turnstile or spam check) is logged at `info` level with the block id and the
+reason (`bot_check`, `turnstile`, `invalid_encoding`, `only_links`, `too_many_links`, `blocked_keyword` or `rspamd`), without the name,
 address, message or IP address.
 
 ## Rate limits
@@ -113,6 +116,60 @@ with an error or without a score, the message is sent anyway and a warning is lo
 
 Errors and old input are passed on within the same request (no session), so the form is rendered again in the response
 to the post itself.
+
+## Cloudflare Turnstile
+
+[Turnstile](https://developers.cloudflare.com/turnstile/) is Cloudflare's alternative to a CAPTCHA. It stops bots
+that run a real browser and so pass the honeypot and the timestamp. It is off by default, and switches on when both
+keys are set in the [site settings](site-settings.md): `contact_turnstile_site_key` and
+`contact_turnstile_secret_key`. In `j87nl/laravel-vue-cms`, editors set them on the Spam protection screen
+(`/admin/cms/settings/spam-protection`).
+
+Create a widget in the Cloudflare dashboard (mode *Managed*) with the site's hostnames, and copy its site key and
+secret key. With only one of the two keys set, Turnstile stays off. The secret key is stored encrypted with `app.key`.
+When it can no longer be decrypted (after `app.key` changed), Turnstile is off and a warning is logged; save the
+secret key again.
+
+When it is on:
+
+- every contact form shows the Turnstile widget (`<div class="cf-turnstile cms-contact__turnstile">`) above the
+  button, and the page loads `https://challenges.cloudflare.com/turnstile/v0/api.js` once. The widget puts its token
+  in the hidden field `cf-turnstile-response`. Visitors without JavaScript see
+  `cms::blocks.contact_form.turnstile_noscript` and cannot send the form;
+- the [Content-Security-Policy](security.md#content-security-policy) of a page with the widget allows
+  `https://challenges.cloudflare.com` in `script-src` and `frame-src`. Other pages keep `script-src 'none'`;
+- a submission that passed the bot check is sent to Cloudflare's `siteverify` endpoint with the secret key, the token
+  and the visitor's IP address, before validation and before the spam checks, so rspamd never scans a bot. A missing
+  or rejected token is logged with the reason `turnstile`, counts toward the IP limit and gets the same redirect as a
+  sent message, but no mail is sent. A token longer than 2048 characters is rejected without asking Cloudflare;
+
+- when Cloudflare refuses the secret key itself (`missing-input-secret` or `invalid-input-secret`), the token is
+  accepted and a warning is logged, so a wrong key never drops genuine messages unnoticed by the visitor.
+
+Cloudflare gets `cms.contact.turnstile.timeout` seconds (default 3) to connect and answer. When it cannot be reached,
+answers with an error or with an unexpected body, a submission that carries a token is accepted (it still goes
+through validation and the spam checks) and a warning is logged. A submission without a token is always rejected.
+This fails open on purpose: a visitor cannot cause that outage, and failing closed would silently drop every genuine
+message while it lasts.
+
+Saving the site settings flushes the [page cache](page-cache.md), so cached pages get the widget, or lose it, right
+away.
+
+### Keys from somewhere else
+
+The keys are read through the contract `J87NL\Cms\Contact\TurnstileKeys`, with `siteKey()` and `secretKey()`. The
+package binds it to `J87NL\Cms\Contact\SiteSettingsTurnstileKeys`, which reads the site settings, unless the app has
+bound it already. To serve the keys from your own settings instead, bind your own class in the `register()` of a
+service provider:
+
+```php
+$this->app->bind(TurnstileKeys::class, SpamProtectionTurnstileKeys::class);
+```
+
+Return `null` from both methods to keep Turnstile off. The keys are read on every render of a contact form and every
+submission. Your own settings do not flush the page cache: run `php artisan cms:flush-page-cache` after changing
+them, or a cached page keeps the widget, or the lack of it, until it expires. A cached page without the widget makes
+every message fail the check.
 
 ## The token
 

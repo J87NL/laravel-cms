@@ -2,6 +2,22 @@
 
 All notable changes to this package are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-10-27
+
+### Added
+
+- Optional Cloudflare Turnstile on the contact form. It is off by default and switches on when the site settings hold both a site key and a secret key. The form then shows the Turnstile widget (managed mode) and loads Cloudflare's script once per page. A submission must carry a `cf-turnstile-response` token that Cloudflare's `siteverify` accepts, within `cms.contact.turnstile.timeout` seconds (default 3). This check runs right after the honeypot and timestamp check, so rspamd never scans a bot. A missing or rejected token is treated like a failed bot check: no mail, the sent redirect, a hit on the hourly IP limit and an `info` log with the new reason `turnstile` (`ContactFormRejection::Turnstile`).
+- The site settings fields `contact_turnstile_site_key` and `contact_turnstile_secret_key`, with a new migration. Both are left out of `SiteSettings::EDITABLE_ATTRIBUTES`, so a form for the other settings leaves them alone. The secret key is cast `encrypted` and hidden from `toArray()` and JSON. `SaveSiteSettings` stores a given site key (trimmed, empty as `null`) and a non-empty secret, keeps the stored one when it is empty, and clears it with `remove_contact_turnstile_secret_key` (`SiteSettings::REMOVE_TURNSTILE_SECRET`). `SiteSettings::hasTurnstileSecret()` tells whether one is stored.
+- The keys are read through the new contract `J87NL\Cms\Contact\TurnstileKeys`. The package binds it to `SiteSettingsTurnstileKeys` unless the app has bound it already, so an app can serve the keys from its own settings.
+- On a page with the Turnstile widget, the Content-Security-Policy allows `https://challenges.cloudflare.com` in `script-src` and `frame-src`.
+- The text `cms::blocks.contact_form.turnstile_noscript`, shown to visitors without JavaScript when Turnstile is on.
+
+### Upgrade notes
+
+- Run `php artisan migrate` for the two new `cms_settings` columns. Turnstile stays off until both keys are set.
+- When Cloudflare cannot be reached, answers with an error or refuses the secret key, a submission with a token is accepted and a warning is logged (fail open, like rspamd). A submission without a token, or with a token longer than 2048 characters, is always rejected.
+- An app that published `blocks/contact-form.blade.php` must add the widget itself; see the package view.
+
 ## [0.5.1] - 2026-10-26
 
 ### Fixed

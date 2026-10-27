@@ -7,10 +7,15 @@ namespace J87NL\Cms\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use J87NL\Cms\Contact\Turnstile;
 use Symfony\Component\HttpFoundation\Response;
 
 class AddSecurityHeaders
 {
+    public function __construct(
+        private readonly Turnstile $turnstile,
+    ) {}
+
     /**
      * @param  Closure(Request): Response  $next
      */
@@ -78,6 +83,11 @@ class AddSecurityHeaders
             $directives = $this->allow($directives, 'frame-src', $frameSources);
         }
 
+        if ($this->showsTurnstile($response)) {
+            $directives = $this->allow($directives, 'script-src', [Turnstile::HOST]);
+            $directives = $this->allow($directives, 'frame-src', [Turnstile::HOST]);
+        }
+
         return implode('; ', array_map(
             fn (string $directive, array $sources): string => sprintf('%s %s', $directive, implode(' ', $sources)),
             array_keys($directives),
@@ -98,6 +108,17 @@ class AddSecurityHeaders
         ]));
 
         return $directives;
+    }
+
+    private function showsTurnstile(Response $response): bool
+    {
+        $content = $response->getContent();
+
+        if (! is_string($content) || ! str_contains($content, sprintf('<script src="%s"', Turnstile::SCRIPT_URL))) {
+            return false;
+        }
+
+        return $this->turnstile->enabled();
     }
 
     /**
