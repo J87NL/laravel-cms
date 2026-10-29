@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Foundation\Auth\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use J87NL\Cms\Actions\SaveBlock;
 use J87NL\Cms\Actions\SavePage;
 use J87NL\Cms\Actions\UploadMedia;
@@ -23,7 +24,10 @@ use Orchestra\Testbench\Factories\UserFactory;
 
 pest()->extend(TestCase::class)->in('Feature');
 
-pest()->beforeEach(fn () => hubGrant(CmsTools::FULL_GRANT))->in('Feature/Mcp');
+pest()->beforeEach(function (): void {
+    hubGrant(CmsTools::FULL_GRANT);
+    Storage::fake('public');
+})->in('Feature/Mcp');
 
 /**
  * @param  array<string, mixed>  $attributes
@@ -55,6 +59,11 @@ function uploadImage(int $width = 2000, int $height = 1000, string $alt = 'A pho
     return app(UploadMedia::class)->handle(UploadedFile::fake()->image('photo.jpg', $width, $height), [
         'alt' => $alt,
     ]);
+}
+
+function pngBase64(int $width = 40, int $height = 30): string
+{
+    return base64_encode(UploadedFile::fake()->image('photo.png', $width, $height)->getContent());
 }
 
 /**

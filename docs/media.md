@@ -84,7 +84,9 @@ after that. When removing the files fails, the replacement still succeeds: the e
 stays in the `replaced` collection, and the next replacement of the asset tries again. Saving the new media item flushes
 the [page cache](page-cache.md).
 
-There is no MCP tool to upload or replace a file: files are only added and replaced in the admin.
+Files are only replaced (and deleted) in the admin; there is no MCP tool for that. Assistants can add new images with
+the MCP tool [`media_upload`](mcp-tools.md#uploading-images), which takes the file as base64 and calls `UploadMedia`
+with the same checks as an admin upload.
 
 ## Using an asset
 

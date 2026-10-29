@@ -13,6 +13,7 @@ use J87NL\Cms\Mcp\Tools\BlocksReorderTool;
 use J87NL\Cms\Mcp\Tools\BlockUpdateLiveTool;
 use J87NL\Cms\Mcp\Tools\BlockUpdateTool;
 use J87NL\Cms\Mcp\Tools\MediaListTool;
+use J87NL\Cms\Mcp\Tools\MediaUploadTool;
 use J87NL\Cms\Mcp\Tools\MenuItemSaveTool;
 use J87NL\Cms\Mcp\Tools\MenuItemsListTool;
 use J87NL\Cms\Mcp\Tools\PageDraftCreateTool;
@@ -43,6 +44,7 @@ class CmsTools
         PagesListTool::class,
         PageGetTool::class,
         MediaListTool::class,
+        MediaUploadTool::class,
         MenuItemsListTool::class,
         RedirectsListTool::class,
         PageDraftCreateTool::class,
@@ -66,7 +68,7 @@ class CmsTools
 
     public const string INSTRUCTIONS = <<<'MARKDOWN'
         CMS tools manage the website's pages, blocks, menus and redirects. They never schedule, make a home page,
-        delete pages or upload media: those happen in the CMS admin.
+        delete pages or delete or replace media: those happen in the CMS admin.
 
         - Read the site with pages_list and page_get; page_get returns the blocks in their order with their data, and
           the pending revision of the page when it has one.
@@ -80,7 +82,8 @@ class CmsTools
           offline and revision_discard throws a pending revision away. Confirm these with the user first.
         - Pages with a planned publication (publish_at) cannot be changed with these tools.
         - block_add lists the block types and their fields in its description; a validation error names the field.
-        - Images come from media_list; use their id in block data (media_id, media_ids) or as og_image_id.
+        - Images come from media_list; use their id in block data (media_id, media_ids) or as og_image_id. media_upload
+          adds a PNG, JPEG, WebP or GIF image (base64, with alt text) and returns its id.
         - menu_item_save may link a menu item to any page, but the item only shows while that page is published.
         - redirect_save and redirect_delete take effect on the live site immediately; confirm with the user first.
         MARKDOWN;

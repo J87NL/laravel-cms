@@ -38,7 +38,7 @@ clients that do not read the server instructions.
 `boot()` runs before every request is handled. Keep the server's own instructions in the `$instructions` property:
 an `#[Instructions]` attribute takes precedence over the property and would drop the CMS guidance.
 
-The package ships 22 tools. `laravel/mcp` lists 15 tools per `tools/list` page by default, so set
+The package ships 23 tools. `laravel/mcp` lists 15 tools per `tools/list` page by default, so set
 `public int $defaultPaginationLength = 50;` on the server when the client or hub does not follow `nextCursor`.
 
 ## The tools
@@ -48,6 +48,7 @@ The package ships 22 tools. `laravel/mcp` lists 15 tools per `tools/list` page b
 | `pages_list` | yes | no | `cms.pages.edit` |
 | `page_get` | yes | no | `cms.pages.edit` |
 | `media_list` | yes | no | `cms.media` |
+| `media_upload` | no | no | `cms.media` |
 | `menu_items_list` | yes | no | `cms.menus` |
 | `redirects_list` | yes | no | `cms.redirects` |
 | `page_draft_create` | no | no | `cms.pages.edit` |
@@ -161,6 +162,27 @@ pending revision again, so `pending_revision` is `null` in that response.
 | `menu_item_save` | `menu` (required), `item_id`, `page_id` or `url`, `label`, `parent_id`. On an update, omitted fields keep their value |
 | `redirect_save` | `redirect_id`, `from_path` and `to` (required), `status_code` (`301` or `302`). A new redirect defaults to `301`; on an update, an omitted status code keeps its current value |
 | `redirect_delete` | `redirect_id` |
+| `media_upload` | `file_name`, `content_base64`, `alt` (all required), `caption`, `focal_x`, `focal_y` (0 to 100, default 50). Returns the new image under `media`, in the shape of `media_list` |
+
+### Uploading images
+
+`media_upload` adds an image to the media library, so its id can go into block data (`media_id`, `media_ids`) or
+`og_image_id` without the admin:
+
+1. `content_base64` holds the file bytes, base64 encoded. A `data:…;base64,` prefix and whitespace are stripped;
+   anything else that is not valid base64 is refused.
+2. The size is checked against `cms.media.max_upload_kilobytes` before the bytes are decoded and again after, so an
+   oversized file never reaches the disk.
+3. The bytes go to a temporary file whose type is read with `finfo`. Only `MediaAsset::ACCEPTED_MIME_TYPES` (JPEG,
+   PNG, WebP and GIF) pass, whatever `file_name` says; SVG and HTML are refused. The stored file name is the slug of
+   `file_name` with the extension of the real type, so JPEG content named `foto.png` is stored as `foto.jpg`.
+4. [`UploadMedia`](media.md#uploading) does the rest, exactly as for an admin upload: the attribute rules of
+   `MediaRules`, re-encoding with `ImageCleaner` (no metadata, no animated GIF, the pixel limit) and the queued WebP
+   conversions. Until the queue has run, `url` points to the original.
+
+The temporary file is removed after both a success and a refusal. Refusals come back as an error result with a
+sentence. The tool is not marked destructive, because a new image changes nothing that visitors see until a block
+uses it.
 
 The descriptions of `block_add` and `block_update` list the registered block types with their translated label and
 their data fields, built from each type's `label()` and `rules()`, so custom block types appear there too.
@@ -169,7 +191,8 @@ their data fields, built from each type's `label()` and `rules()`, so custom blo
 
 ## Rules the tools follow
 
-- No tool schedules, makes a home page, deletes pages or uploads or replaces media files; those stay in the CMS admin.
+- No tool schedules, makes a home page, deletes pages or deletes or replaces media files; those stay in the CMS admin.
+  `media_upload` only adds new images.
 - Pages with a planned publication (`publish_at`) are read-only for every page and block tool, also for a user who may
   publish. `pages_list` and `page_get` report this as `writable`.
 - When the app defines the `cms.pages.write` gate, the direct writes check it with the page: every live tool, and the

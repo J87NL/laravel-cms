@@ -2,6 +2,21 @@
 
 All notable changes to this package are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] - 2026-10-29
+
+### Added
+
+- The MCP tool `media_upload` (`J87NL\Cms\Mcp\Tools\MediaUploadTool`), so assistants can add images to the media library and use their ids in block data (`media_id`, `media_ids`) or as `og_image_id`. It takes `file_name`, the file as base64 in `content_base64` (a `data:…;base64,` prefix is allowed), `alt` and optionally `caption`, `focal_x` and `focal_y`, and returns the new image in the shape of `media_list`. It needs `cms.media` and a full grant, and is not marked destructive.
+- The size is checked against `cms.media.max_upload_kilobytes` before anything is written to disk. The type is read from the content with `finfo`, so only JPEG, PNG, WebP and GIF pass, whatever the file name says (no SVG). The upload then goes through `UploadMedia`, with the same attribute rules, re-encoding without metadata and queued WebP conversions as an admin upload. The temporary file is always removed.
+
+### Changed
+
+- The description of `media_list` and `Cms::mcpInstructions()` point to `media_upload`. Deleting and replacing images stays admin-only.
+
+### Upgrade notes
+
+- No migration is needed. `Cms::mcpTools()` now returns 23 tools; an app server that sets `$defaultPaginationLength` must still list all of its tools on one page when the hub does not follow `nextCursor`.
+
 ## [0.6.0] - 2026-10-27
 
 ### Added
@@ -163,6 +178,8 @@ First release, extracted from the j87.nl app.
 
 - Require `symfony/html-sanitizer` `^7.4.13|^8.0.13` for CVE-2026-45064, CVE-2026-45066, CVE-2026-45753, CVE-2026-48760 and CVE-2026-48761.
 
+[0.7.0]: https://github.com/J87NL/laravel-cms/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/J87NL/laravel-cms/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/J87NL/laravel-cms/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/J87NL/laravel-cms/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/J87NL/laravel-cms/compare/v0.3.1...v0.4.0
