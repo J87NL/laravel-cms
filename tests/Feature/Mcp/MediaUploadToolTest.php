@@ -124,19 +124,48 @@ it('refuses a file over the upload limit before writing it to disk', function ()
         ->and(temporaryUploads())->toBe($before);
 });
 
-it('accepts a file of exactly the upload limit', function (): void {
+it('refuses base64 that is too long before decoding it', function (string $content, string $message): void {
+    config()->set('cms.media.max_upload_kilobytes', 1);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::Media))
+        ->tool(MediaUploadTool::class, [
+            'file_name' => 'groot.png',
+            'content_base64' => $content,
+            'alt' => 'Groot',
+        ])
+        ->assertHasErrors([$message]);
+
+    expect(MediaAsset::query()->count())->toBe(0);
+})->with([
+    'longer than the limit allows, with an invalid character' => [str_repeat('A', 2000).'*', 'The image is larger than 1 kB'],
+    'longer than any file of the limit' => [str_repeat('A', 5000), 'content base64 field must not be greater than'],
+]);
+
+it('accepts a file of exactly the upload limit as base64 with line breaks', function (): void {
     $png = UploadedFile::fake()->image('photo.png', 10, 10)->getContent();
     config()->set('cms.media.max_upload_kilobytes', 1);
 
     CmsTestServer::actingAs(cmsUser(CmsPermission::Media))
         ->tool(MediaUploadTool::class, [
             'file_name' => 'precies.png',
-            'content_base64' => base64_encode(str_pad($png, 1024, "\0")),
+            'content_base64' => sprintf('data:image/png;base64,%s', chunk_split(base64_encode(str_pad($png, 1024, "\0")), 76, "\r\n")),
             'alt' => 'Precies',
         ])
         ->assertOk();
 
     expect(MediaAsset::query()->count())->toBe(1);
+});
+
+it('leaves the size out of the schema when the upload limit is off', function (): void {
+    config()->set('cms.media.max_upload_kilobytes', 0);
+
+    expect(app(MediaUploadTool::class)->toArray()['inputSchema']['properties']['content_base64']['description'])
+        ->not->toContain('kB');
+
+    config()->set('cms.media.max_upload_kilobytes', 2048);
+
+    expect(app(MediaUploadTool::class)->toArray()['inputSchema']['properties']['content_base64']['description'])
+        ->toContain('at most 2048 kB');
 });
 
 it('refuses missing or invalid attributes and removes the temporary file', function (array $arguments, string $message): void {

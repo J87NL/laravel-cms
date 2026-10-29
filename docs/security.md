@@ -108,6 +108,11 @@ The validation message and the help text in the package's translations only name
 Uploaded images are decoded and encoded again with GD, which drops EXIF data such as GPS locations. Images above
 `cms.media.max_pixels` are refused before they are decoded. See [Media](media.md#uploading).
 
+The MCP tool `media_upload` takes images as base64 and refuses them over `cms.media.max_upload_kilobytes` before
+they reach the disk. It reads the type from the content with `finfo`, never from the file name, so only JPEG, PNG, WebP
+and GIF pass and SVG (which could carry scripts) is refused. The image then goes through the same `UploadMedia` and GD
+re-encoding as an admin upload. See [MCP tools](mcp-tools.md#uploading-images).
+
 ## Contact form
 
 The contact form has no CSRF token, because public routes have no session. Instead it uses a honeypot, a signed

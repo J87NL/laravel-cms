@@ -7,7 +7,7 @@ All notable changes to this package are documented here. The format follows [Kee
 ### Added
 
 - The MCP tool `media_upload` (`J87NL\Cms\Mcp\Tools\MediaUploadTool`), so assistants can add images to the media library and use their ids in block data (`media_id`, `media_ids`) or as `og_image_id`. It takes `file_name`, the file as base64 in `content_base64` (a `data:…;base64,` prefix is allowed), `alt` and optionally `caption`, `focal_x` and `focal_y`, and returns the new image in the shape of `media_list`. It needs `cms.media` and a full grant, and is not marked destructive.
-- The size is checked against `cms.media.max_upload_kilobytes` before anything is written to disk. The type is read from the content with `finfo`, so only JPEG, PNG, WebP and GIF pass, whatever the file name says (no SVG). The upload then goes through `UploadMedia`, with the same attribute rules, re-encoding without metadata and queued WebP conversions as an admin upload. The temporary file is always removed.
+- The size is checked against `cms.media.max_upload_kilobytes` before anything is written to disk: `content_base64` may be no longer than a file of that size needs as base64 (plus room for a prefix and line breaks), and the decoded bytes are checked again. The type is read from the content with `finfo`, so only JPEG, PNG, WebP and GIF pass, whatever the file name says (no SVG). The upload then goes through `UploadMedia`, with the same attribute rules, re-encoding without metadata and queued WebP conversions as an admin upload. The temporary file is always removed.
 
 ### Changed
 

@@ -44,9 +44,11 @@ class MediaUploadTool extends Tool
             return $user;
         }
 
+        $maxKilobytes = (int) config('cms.media.max_upload_kilobytes', 10240);
+
         $input = $request->validate([
             'file_name' => ['required', 'string', 'max:255'],
-            'content_base64' => ['required', 'string'],
+            'content_base64' => ['required', 'string', ...($maxKilobytes > 0 ? [sprintf('max:%d', $this->maxEncodedLength($maxKilobytes))] : [])],
             'alt' => ['required', 'string'],
             'caption' => ['nullable', 'string'],
             'focal_x' => ['nullable', 'integer'],
@@ -54,8 +56,6 @@ class MediaUploadTool extends Tool
         ]);
 
         $encoded = (string) preg_replace('/\s+/', '', (string) preg_replace('/^data:[^,]*;base64,/i', '', trim((string) $input['content_base64'])));
-        $maxKilobytes = (int) config('cms.media.max_upload_kilobytes', 10240);
-
         if ($maxKilobytes > 0 && intdiv(strlen($encoded), 4) * 3 > $maxKilobytes * 1024 + 2) {
             return $this->tooLarge($maxKilobytes);
         }
@@ -63,7 +63,7 @@ class MediaUploadTool extends Tool
         $bytes = base64_decode($encoded, true);
 
         if ($bytes === false || $bytes === '') {
-            return Response::error('content_base64 is not valid base64. Pass the bytes of the image file, base64 encoded.');
+            return Response::error('content_base64 is not valid base64. Pass the bytes of the image file in standard base64 (A-Z, a-z, 0-9, + and /, padded with =).');
         }
 
         if ($maxKilobytes > 0 && strlen($bytes) > $maxKilobytes * 1024) {
@@ -115,12 +115,28 @@ class MediaUploadTool extends Tool
     {
         return [
             'file_name' => $schema->string()->description('The original file name with its extension, for example "github.png". The stored file name is derived from it.')->required(),
-            'content_base64' => $schema->string()->description(sprintf('The bytes of a PNG, JPEG, WebP or GIF image, base64 encoded, at most %d kB before encoding. A data: URL prefix such as "data:image/png;base64," is allowed.', (int) config('cms.media.max_upload_kilobytes', 10240)))->required(),
+            'content_base64' => $schema->string()->description($this->contentDescription())->required(),
             'alt' => $schema->string()->description('The alt text that describes the image, at most 250 characters.')->required(),
             'caption' => $schema->string()->description('An optional caption, at most 500 characters.'),
             'focal_x' => $schema->integer()->description('The horizontal focal point in percent (0 to 100) for cropping; the centre when left out.'),
             'focal_y' => $schema->integer()->description('The vertical focal point in percent (0 to 100) for cropping; the centre when left out.'),
         ];
+    }
+
+    private function contentDescription(): string
+    {
+        $maxKilobytes = (int) config('cms.media.max_upload_kilobytes', 10240);
+        $limit = $maxKilobytes > 0 ? sprintf(', at most %d kB before encoding', $maxKilobytes) : '';
+
+        return sprintf('The bytes of a PNG, JPEG, WebP or GIF image in standard base64%s. A data: URL prefix such as "data:image/png;base64," is allowed.', $limit);
+    }
+
+    /**
+     * The longest content_base64 that can hold a file of the limit, with room for a data: URL prefix and line breaks.
+     */
+    private function maxEncodedLength(int $maxKilobytes): int
+    {
+        return intdiv($maxKilobytes * 1024 + 2, 3) * 4 + 1024 + intdiv($maxKilobytes * 1024, 57) * 2;
     }
 
     private function tooLarge(int $maxKilobytes): Response
