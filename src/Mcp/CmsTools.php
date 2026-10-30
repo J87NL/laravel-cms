@@ -12,6 +12,7 @@ use J87NL\Cms\Mcp\Tools\BlocksReorderLiveTool;
 use J87NL\Cms\Mcp\Tools\BlocksReorderTool;
 use J87NL\Cms\Mcp\Tools\BlockUpdateLiveTool;
 use J87NL\Cms\Mcp\Tools\BlockUpdateTool;
+use J87NL\Cms\Mcp\Tools\MediaDeleteTool;
 use J87NL\Cms\Mcp\Tools\MediaListTool;
 use J87NL\Cms\Mcp\Tools\MediaUploadChunkTool;
 use J87NL\Cms\Mcp\Tools\MediaUploadFinishTool;
@@ -51,6 +52,7 @@ class CmsTools
         MediaUploadStartTool::class,
         MediaUploadChunkTool::class,
         MediaUploadFinishTool::class,
+        MediaDeleteTool::class,
         MenuItemsListTool::class,
         RedirectsListTool::class,
         PageDraftCreateTool::class,
@@ -74,7 +76,7 @@ class CmsTools
 
     public const string INSTRUCTIONS = <<<'MARKDOWN'
         CMS tools manage the website's pages, blocks, menus and redirects. They never schedule, make a home page,
-        delete pages or delete or replace media: those happen in the CMS admin.
+        delete pages or replace image files: those happen in the CMS admin.
 
         - Read the site with pages_list and page_get; page_get returns the blocks in their order with their data, and
           the pending revision of the page when it has one.
@@ -92,6 +94,8 @@ class CmsTools
           adds a PNG, JPEG, WebP or GIF image (base64 with alt text, or a public https source_url) and returns its id.
           Pass sha256 so a damaged transfer is reported as such. For a large or repetitive file, use
           media_upload_start, media_upload_chunk and media_upload_finish: a damaged chunk is resent on its own.
+        - media_delete permanently deletes images that are not in use (media_list shows in_use); confirm with the user
+          first.
         - menu_item_save may link a menu item to any page, but the item only shows while that page is published.
         - redirect_save and redirect_delete take effect on the live site immediately; confirm with the user first.
         MARKDOWN;

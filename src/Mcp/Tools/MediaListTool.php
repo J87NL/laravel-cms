@@ -23,7 +23,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('media_list')]
 #[Title('List CMS images')]
-#[Description('Lists the images in the media library, newest first, with id, alt text, caption, an image url and whether the image is in use. Use the ids in block data (media_id, media_ids) or as og_image_id. Paginated: pass page for more. Upload a new image with media_upload; deleting or replacing images is only possible in the CMS admin.')]
+#[Description('Lists the images in the media library, newest first, with id, alt text, caption, an image url and whether the image is in use. Use the ids in block data (media_id, media_ids) or as og_image_id. Paginated: pass page for more. Upload a new image with media_upload and delete unused ones with media_delete; replacing the file of an image is only possible in the CMS admin.')]
 #[IsReadOnly]
 #[IsDestructive(false)]
 class MediaListTool extends Tool

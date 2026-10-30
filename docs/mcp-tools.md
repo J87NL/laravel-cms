@@ -38,7 +38,7 @@ clients that do not read the server instructions.
 `boot()` runs before every request is handled. Keep the server's own instructions in the `$instructions` property:
 an `#[Instructions]` attribute takes precedence over the property and would drop the CMS guidance.
 
-The package ships 26 tools. `laravel/mcp` lists 15 tools per `tools/list` page by default, so set
+The package ships 27 tools. `laravel/mcp` lists 15 tools per `tools/list` page by default, so set
 `public int $defaultPaginationLength = 50;` on the server when the client or hub does not follow `nextCursor`.
 
 ## The tools
@@ -52,6 +52,7 @@ The package ships 26 tools. `laravel/mcp` lists 15 tools per `tools/list` page b
 | `media_upload_start` | no | no | `cms.media` |
 | `media_upload_chunk` | no | no | `cms.media` |
 | `media_upload_finish` | no | no | `cms.media` |
+| `media_delete` | no | yes | `cms.media` |
 | `menu_items_list` | yes | no | `cms.menus` |
 | `redirects_list` | yes | no | `cms.redirects` |
 | `page_draft_create` | no | no | `cms.pages.edit` |
@@ -76,7 +77,7 @@ Every tool that changes what visitors see is marked destructive: the live tools,
 `menu_item_save` and `redirect_delete`. A hub that disables destructive tools until someone enables them (as the J87
 MCP hub does) therefore keeps the draft tools available and the live tools off. `block_remove` and `revision_discard`
 change nothing for visitors when they act on a pending revision, but they throw content away, so they are marked
-destructive too.
+destructive too, like `media_delete`, which only deletes images nobody uses but cannot be undone.
 
 ## Draft and live mode
 
@@ -169,6 +170,7 @@ pending revision again, so `pending_revision` is `null` in that response.
 | `media_upload_start` | `file_name`, `size` (bytes), `sha256` of the whole file, `alt` (all required), `caption`, `focal_x`, `focal_y`. Returns `upload_id`, `chunk_bytes`, `chunk_count` and `expires_at` |
 | `media_upload_chunk` | `upload_id`, `index` (0-based), `content_base64` and the chunk's `sha256` (all required) |
 | `media_upload_finish` | `upload_id`. Returns the new image under `media`, like `media_upload` |
+| `media_delete` | `media_ids` (1 to 25 distinct ids). Returns `results`: per id its `status` (`deleted`, `in_use` or `not_found`), and for deleted and in-use images `alt` and `file_name`, plus `usage_count` when in use |
 
 ### Uploading images
 
@@ -216,6 +218,15 @@ after it expired (`cms.media.chunked_uploads.ttl_minutes`, default 60), it is no
 `cms.media.chunked_uploads.max_open_per_user` (default 5) open uploads. The command `cms:prune-media-uploads`, which
 the package schedules every hour, deletes expired uploads with their chunks.
 
+#### Deleting images
+
+`media_delete` deletes images through [`DeleteMedia`](media.md#deleting), one id at a time, so an image in use or a
+missing id does not stop the others. `DeleteMedia` refuses an image that `MediaUsage` counts as used (blocks, page
+`og_image_id`, pending revisions and the site settings); the tool reports it as `in_use` with its usage count and
+leaves it and its files alone. A deleted image loses its media rows and its files, which are removed after the delete
+commits. Deleting cannot be undone, so the tool is marked destructive and its description asks the assistant to
+confirm with the user first; `media_list` shows `in_use` per image.
+
 #### Downloading from source_url
 
 Instead of `content_base64`, `media_upload` takes `source_url`, a public `https://` address of an image that is already
@@ -241,8 +252,8 @@ their data fields, built from each type's `label()` and `rules()`, so custom blo
 
 ## Rules the tools follow
 
-- No tool schedules, makes a home page, deletes pages or deletes or replaces media files; those stay in the CMS admin.
-  The upload tools only add new images.
+- No tool schedules, makes a home page, deletes pages or replaces the file of an image; those stay in the CMS admin.
+  The upload tools only add new images and `media_delete` only deletes images that are not in use.
 - Pages with a planned publication (`publish_at`) are read-only for every page and block tool, also for a user who may
   publish. `pages_list` and `page_get` report this as `writable`.
 - When the app defines the `cms.pages.write` gate, the direct writes check it with the page: every live tool, and the

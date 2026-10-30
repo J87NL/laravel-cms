@@ -15,6 +15,7 @@ use J87NL\Cms\Mcp\Tools\BlocksReorderLiveTool;
 use J87NL\Cms\Mcp\Tools\BlocksReorderTool;
 use J87NL\Cms\Mcp\Tools\BlockUpdateLiveTool;
 use J87NL\Cms\Mcp\Tools\BlockUpdateTool;
+use J87NL\Cms\Mcp\Tools\MediaDeleteTool;
 use J87NL\Cms\Mcp\Tools\MediaListTool;
 use J87NL\Cms\Mcp\Tools\MediaUploadStartTool;
 use J87NL\Cms\Mcp\Tools\MediaUploadTool;
@@ -77,6 +78,7 @@ function cmsWriteTools(): array
         'menu_item_save' => [MenuItemSaveTool::class, CmsPermission::Menus, fn (): array => ['menu' => 'main', 'url' => '/contact', 'label' => 'Contact']],
         'redirect_save' => [RedirectSaveTool::class, CmsPermission::Redirects, fn (): array => ['from_path' => '/oud', 'to' => '/nieuw']],
         'redirect_delete' => [RedirectDeleteTool::class, CmsPermission::Redirects, fn (): array => ['redirect_id' => makeRedirect('oud', '/nieuw')->id]],
+        'media_delete' => [MediaDeleteTool::class, CmsPermission::Media, fn (): array => ['media_ids' => [uploadImage()->id]]],
         'media_upload_start' => [MediaUploadStartTool::class, CmsPermission::Media, fn (): array => ['file_name' => 'foto.png', 'size' => 100, 'sha256' => str_repeat('a', 64), 'alt' => 'Een foto']],
         'media_upload' => [MediaUploadTool::class, CmsPermission::Media, fn (): array => ['file_name' => 'foto.png', 'content_base64' => pngBase64(), 'alt' => 'Een foto']],
     ];
@@ -153,6 +155,7 @@ it('registers every CMS tool with explicit read-only and destructive hints', fun
             'revision_discard',
             'menu_item_save',
             'redirect_delete',
+            'media_delete',
         ]);
 });
 

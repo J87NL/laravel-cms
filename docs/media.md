@@ -84,7 +84,8 @@ after that. When removing the files fails, the replacement still succeeds: the e
 stays in the `replaced` collection, and the next replacement of the asset tries again. Saving the new media item flushes
 the [page cache](page-cache.md).
 
-Files are only replaced (and deleted) in the admin; there is no MCP tool for that. Assistants can add new images with
+Files are only replaced in the admin; there is no MCP tool for that. Assistants can delete unused images with the MCP
+tool [`media_delete`](mcp-tools.md#deleting-images), and add new images with
 the MCP tool [`media_upload`](mcp-tools.md#uploading-images) (or in chunks with `media_upload_start`, `media_upload_chunk`
 and `media_upload_finish`), which takes the file as base64 or from a public https address and calls `UploadMedia`
 with the same checks as an admin upload.
@@ -124,6 +125,9 @@ counts the uses:
 for one. Deleting an unused asset also deletes its files. `DeleteMedia` locks the asset row while it counts, deletes the
 rows in a transaction and removes the files only after it commits, so a rolled back delete keeps the files and a
 replacement that runs at the same time cannot leave files behind.
+
+The MCP tool [`media_delete`](mcp-tools.md#deleting-images) calls `DeleteMedia` for up to 25 ids and reports per id
+whether the image was deleted, is in use or was not found.
 
 ## Select options
 

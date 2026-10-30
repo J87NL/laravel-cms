@@ -94,6 +94,7 @@ The package ships CMS tools on [`laravel/mcp`](https://github.com/laravel/mcp), 
 | `media_upload_start` | no | no | `cms.media` |
 | `media_upload_chunk` | no | no | `cms.media` |
 | `media_upload_finish` | no | no | `cms.media` |
+| `media_delete` | no | yes | `cms.media` |
 | `menu_items_list` | yes | no | `cms.menus` |
 | `redirects_list` | yes | no | `cms.redirects` |
 | `page_draft_create` | no | no | `cms.pages.edit` |
@@ -114,11 +115,12 @@ The package ships CMS tools on [`laravel/mcp`](https://github.com/laravel/mcp), 
 | `redirect_save` | no | no | `cms.redirects` |
 | `redirect_delete` | no | yes | `cms.redirects` |
 
-- No tool schedules, makes a home page, deletes pages or deletes or replaces media. Scheduling stays in the CMS admin.
+- No tool schedules, makes a home page, deletes pages or replaces the file of an image. Scheduling stays in the CMS admin.
+- `media_delete` permanently deletes images that are not in use (blocks, page OG images, pending revisions, site settings), each id on its own, and reports `deleted`, `in_use` or `not_found` per id. It is marked destructive.
 - `media_upload` adds a PNG, JPEG, WebP or GIF image from base64 content or a public https `source_url` through `UploadMedia`, with the same size limit, alt text rules and re-encoding as the admin. The type is read from the content, never from the file name, so SVG is refused. An optional `sha256` turns a miscopied base64 string into a clear "arrived damaged" error. `media_upload_start`, `media_upload_chunk` and `media_upload_finish` upload a file in checksummed chunks, so a damaged chunk is resent on its own. See [MCP tools](docs/mcp-tools.md#uploading-images).
 - The draft tools (`page_update`, `block_add`, `block_update`, `block_remove`, `blocks_reorder`) change a draft or unpublished page directly. On a published page they collect the changes in one pending revision; the live page stays as it is until `page_publish` or the admin publishes it. Publishing applies only what the pending revision changed, so live changes made in the meantime stay. `page_publish`, `page_unpublish` and `revision_discard` also check the `cms.pages.write` gate. The `_live` tools change the page directly, also when it is published, and need `cms.pages.publish`. See [MCP tools](docs/mcp-tools.md#draft-and-live-mode).
 - Pages with a planned publication (`publish_at`) are read-only for every page and block tool. When the app defines the `cms.pages.write` gate (as `j87nl/laravel-vue-cms` does), direct writes check it as well; draft writes into a pending revision do not.
-- Writes go through the same actions and validation rules as the admin (`J87NL\Cms\Validation\PageRules` and `RedirectRules`), so validation, sanitizing, revisions and cache invalidation are the same. Every tool that changes what visitors see is marked destructive (the `_live` tools, `page_publish`, `page_unpublish`, `menu_item_save` and `redirect_delete`), like `block_remove` and `revision_discard`, which throw content away: the hub starts destructive tools disabled until an admin enables them.
+- Writes go through the same actions and validation rules as the admin (`J87NL\Cms\Validation\PageRules` and `RedirectRules`), so validation, sanitizing, revisions and cache invalidation are the same. Every tool that changes what visitors see is marked destructive (the `_live` tools, `page_publish`, `page_unpublish`, `menu_item_save` and `redirect_delete`), like `block_remove`, `revision_discard` and `media_delete`, which throw content away: the hub starts destructive tools disabled until an admin enables them.
 - Every tool runs as the authenticated user and checks the CMS permission above. A missing user or permission returns an error result with a sentence, never an exception.
 - Only a request with the header `X-J87-Grant-Level: full` may run tools that are not read-only. A missing header, `read` or any other value only allows the read-only tools.
 
@@ -142,7 +144,7 @@ class SiteServer extends Server
 }
 ```
 
-The package ships 26 tools, more than the 15 that `laravel/mcp` lists per `tools/list` page by default. Set `public int $defaultPaginationLength = 50;` on the server when the hub does not follow `nextCursor`.
+The package ships 27 tools, more than the 15 that `laravel/mcp` lists per `tools/list` page by default. Set `public int $defaultPaginationLength = 50;` on the server when the hub does not follow `nextCursor`.
 
 `boot()` runs before every request is handled. Keep the server's own instructions in the `$instructions` property: an `#[Instructions]` attribute takes precedence over the property and would drop the CMS guidance.
 
