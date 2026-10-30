@@ -23,7 +23,9 @@ use Throwable;
  * limit.
  *
  * The request always goes through Guzzle's curl handler, without a proxy: the stream handler and a proxy would both
- * resolve the host name again, which would undo the pinning.
+ * resolve the host name again, which would undo the pinning. Only CURLOPT_RESOLVE is passed as a curl option; Guzzle 8
+ * refuses curl options it has a request option for. The progress callback stops a download past the size limit on
+ * Guzzle 8; Guzzle 7 ignores its answer, so there the time limit and store() bound the download.
  */
 class RemoteImageDownloader
 {
@@ -190,18 +192,15 @@ class RemoteImageDownloader
                 ->withOptions([
                     'allow_redirects' => false,
                     'proxy' => '',
-                    'curl' => $this->pinned($host, $address) + [
-                        CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
-                        CURLOPT_NOPROGRESS => false,
-                        CURLOPT_PROGRESSFUNCTION => function (mixed $handle, int $downloadTotal, int $downloaded) use ($maxBytes, &$tooLarge): int {
-                            $tooLarge = $maxBytes > 0 && max($downloadTotal, $downloaded) > $maxBytes;
+                    'curl' => $this->pinned($host, $address),
+                    'progress' => function (int $downloadTotal, int $downloaded) use ($maxBytes, &$tooLarge): bool {
+                        $tooLarge = $maxBytes > 0 && max($downloadTotal, $downloaded) > $maxBytes;
 
-                            return $tooLarge ? 1 : 0;
-                        },
-                    ],
+                        return $tooLarge;
+                    },
                 ])
-                ->connectTimeout((int) max(1, ceil($secondsLeft)))
-                ->timeout((int) max(1, ceil($secondsLeft)))
+                ->connectTimeout($secondsLeft)
+                ->timeout($secondsLeft)
                 ->accept('image/*')
                 ->get((string) $uri);
         } catch (Throwable $exception) {

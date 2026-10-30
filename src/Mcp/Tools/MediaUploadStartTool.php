@@ -60,7 +60,7 @@ class MediaUploadStartTool extends Tool
         $maxOpen = (int) config('cms.media.chunked_uploads.max_open_per_user', 5);
 
         if ($maxOpen > 0 && MediaUploadSession::query()->openFor($userId)->count() >= $maxOpen) {
-            return Response::error(sprintf('You already have %d unfinished chunked uploads, the most allowed. Finish one with media_upload_finish, or wait until it expires after an hour.', $maxOpen));
+            return Response::error(sprintf('You already have %d unfinished chunked uploads, the most allowed. Finish one with media_upload_finish, or wait until it expires an hour after its last chunk.', $maxOpen));
         }
 
         $session = MediaUploadSession::query()

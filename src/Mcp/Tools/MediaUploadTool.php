@@ -148,10 +148,7 @@ class MediaUploadTool extends Tool
 
     private function contentDescription(): string
     {
-        $maxKilobytes = (int) config('cms.media.max_upload_kilobytes', 10240);
-        $limit = $maxKilobytes > 0 ? sprintf(', at most %d kB before encoding', $maxKilobytes) : '';
-
-        return sprintf('The bytes of a PNG, JPEG, WebP or GIF image in standard base64%s. A data: URL prefix such as "data:image/png;base64," is allowed.', $limit);
+        return sprintf('The bytes of a PNG, JPEG, WebP or GIF image in standard base64, at most %d kB before encoding. A data: URL prefix such as "data:image/png;base64," is allowed.', intdiv(ImageUploader::maxBytes(), 1024));
     }
 
     /**

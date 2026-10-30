@@ -87,19 +87,42 @@ class MediaDeleteTool extends Tool
             return ['id' => $id, 'status' => 'not_found'];
         } catch (ValidationException $exception) {
             if (! array_key_exists('media', $exception->errors())) {
-                report($exception);
-
-                return ['id' => $id, 'status' => 'failed', ...$details];
+                return $this->failed($id, $details, $exception);
             }
 
-            return ['id' => $id, 'status' => 'in_use', ...$details, 'usage_count' => max(1, $mediaUsage->count($asset))];
+            return ['id' => $id, 'status' => 'in_use', ...$details, 'usage_count' => $this->usageCount($asset, $mediaUsage)];
         } catch (Throwable $exception) {
-            report($exception);
-
-            return ['id' => $id, 'status' => 'failed', ...$details];
+            return $this->failed($id, $details, $exception);
         }
 
         return ['id' => $id, 'status' => 'deleted', ...$details];
+    }
+
+    /**
+     * An unexpected error is reported. The row is looked up again, because an error after the commit (such as a
+     * listener) leaves the image deleted.
+     *
+     * @param  array{alt: string|null, file_name: string|null}  $details
+     * @return array{id: int, status: string, alt: string|null, file_name: string|null}
+     */
+    private function failed(int $id, array $details, Throwable $exception): array
+    {
+        report($exception);
+
+        $gone = ! MediaAsset::query()->whereKey($id)->exists();
+
+        return ['id' => $id, 'status' => $gone ? 'deleted' : 'failed', ...$details];
+    }
+
+    private function usageCount(MediaAsset $asset, MediaUsage $mediaUsage): int
+    {
+        try {
+            return max(1, $mediaUsage->count($asset));
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return 1;
+        }
     }
 
     /**

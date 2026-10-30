@@ -458,3 +458,16 @@ it('keeps a hard limit on chunked uploads when the upload limit is off', functio
         ->tool(MediaUploadStartTool::class, ['file_name' => 'a.png', 'size' => ImageUploader::HARD_MAX_BYTES + 1, 'sha256' => str_repeat('a', 64), 'alt' => 'A'])
         ->assertHasErrors([sprintf('The image is larger than %d kB', ImageUploader::HARD_MAX_BYTES / 1024)]);
 });
+
+it('leaves directories alone that are not upload directories', function (string $directory, array $kept): void {
+    config()->set('cms.media.chunked_uploads.directory', $directory);
+    Storage::disk('local')->put('invoices/2026.pdf', 'keep');
+    Storage::disk('local')->put('cms-media-uploads/notes/readme.txt', 'keep');
+
+    $this->artisan('cms:prune-media-uploads')->assertSuccessful();
+
+    expect(Storage::disk('local')->allFiles())->toEqualCanonicalizing($kept);
+})->with([
+    'the disk root' => ['/', ['invoices/2026.pdf', 'cms-media-uploads/notes/readme.txt']],
+    'a directory with other content' => ['cms-media-uploads', ['invoices/2026.pdf', 'cms-media-uploads/notes/readme.txt']],
+]);

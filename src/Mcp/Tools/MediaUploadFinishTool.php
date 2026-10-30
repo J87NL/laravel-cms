@@ -51,7 +51,7 @@ class MediaUploadFinishTool extends Tool
         $session = MediaUploadSession::findOpen((string) $input['upload_id'], (string) $user->getAuthIdentifier());
 
         if (is_null($session)) {
-            return Response::error(sprintf('Upload %s was not found. It may have expired after an hour or been finished; start a new one with media_upload_start.', $input['upload_id']));
+            return Response::error(sprintf('Upload %s was not found. It may have expired an hour after its last chunk, or been finished; start a new one with media_upload_start.', $input['upload_id']));
         }
 
         $missing = $this->missingChunks($session);

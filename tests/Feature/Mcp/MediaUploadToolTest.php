@@ -2,12 +2,15 @@
 
 declare(strict_types=1);
 
+use GuzzleHttp\Handler\CurlFactory;
+use GuzzleHttp\Psr7\Request as GuzzleRequest;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\Fluent\AssertableJson;
 use J87NL\Cms\CmsPermission;
+use J87NL\Cms\Mcp\ImageUploader;
 use J87NL\Cms\Mcp\Tools\MediaUploadTool;
 use J87NL\Cms\Media\Remote\HostResolver;
 use J87NL\Cms\Media\Remote\RemoteImageDownloader;
@@ -180,11 +183,11 @@ it('accepts a file of exactly the upload limit as base64 with line breaks', func
     expect(MediaAsset::query()->count())->toBe(1);
 });
 
-it('leaves the size out of the schema when the upload limit is off', function (): void {
+it('names the hard limit in the schema when the upload limit is off', function (): void {
     config()->set('cms.media.max_upload_kilobytes', 0);
 
     expect(app(MediaUploadTool::class)->toArray()['inputSchema']['properties']['content_base64']['description'])
-        ->not->toContain('kB');
+        ->toContain(sprintf('at most %d kB', ImageUploader::HARD_MAX_BYTES / 1024));
 
     config()->set('cms.media.max_upload_kilobytes', 2048);
 
@@ -428,11 +431,16 @@ it('pins the connection to the checked address, without a proxy or the stream ha
 
     expect($seen)->toHaveCount(2)
         ->and($seen[0]['curl'][CURLOPT_RESOLVE])->toBe(['images.example.com:443:93.184.216.34'])
-        ->and($seen[0]['curl'][CURLOPT_PROTOCOLS])->toBe(CURLPROTO_HTTPS)
+        ->and($seen[0]['progress'])->toBeCallable()
         ->and($seen[0]['proxy'])->toBe('')
         ->and($seen[0]['allow_redirects'])->toBeFalse()
         ->and($seen[0]['stream'] ?? false)->toBeFalse()
         ->and($seen[1]['curl'])->not->toHaveKey(CURLOPT_RESOLVE);
+
+    foreach ($seen as $options) {
+        $easy = (new CurlFactory(1))->create(new GuzzleRequest('GET', 'https://images.example.com/logo.png'), $options);
+        curl_close($easy->handle);
+    }
 });
 
 it('resolves a relative redirect against the current address', function (): void {

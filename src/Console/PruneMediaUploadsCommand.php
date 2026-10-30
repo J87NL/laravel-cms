@@ -6,6 +6,7 @@ namespace J87NL\Cms\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use J87NL\Cms\Models\MediaUploadSession;
 
 class PruneMediaUploadsCommand extends Command
@@ -27,12 +28,16 @@ class PruneMediaUploadsCommand extends Command
                 $pruned++;
             });
 
-        $known = MediaUploadSession::query()->pluck('id')->all();
-        $base = rtrim((string) config('cms.media.chunked_uploads.directory', 'cms-media-uploads'), '/');
+        $base = trim((string) config('cms.media.chunked_uploads.directory', 'cms-media-uploads'), '/');
 
-        foreach ($disk->directories($base) as $directory) {
-            if (! in_array(basename($directory), $known, true)) {
-                $disk->deleteDirectory($directory);
+        if ($base !== '') {
+            $directories = $disk->directories($base);
+            $known = MediaUploadSession::query()->pluck('id')->all();
+
+            foreach ($directories as $directory) {
+                if (Str::isUuid(basename($directory)) && ! in_array(basename($directory), $known, true)) {
+                    $disk->deleteDirectory($directory);
+                }
             }
         }
 

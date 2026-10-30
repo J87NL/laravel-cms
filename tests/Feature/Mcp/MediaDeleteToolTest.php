@@ -151,3 +151,27 @@ it('rejects an empty list, more than 25 ids, duplicate ids and ids that are not 
     'null' => [fn (MediaAsset $asset): array => [null], 'field is required'],
     'text' => [fn (MediaAsset $asset): array => ['abc'], 'must be an integer'],
 ]);
+
+it('reports an image as deleted when an error came after it was deleted', function (): void {
+    $asset = uploadImage(alt: 'Weg');
+
+    $real = app(DeleteMedia::class);
+    app()->instance(DeleteMedia::class, new class($real) extends DeleteMedia
+    {
+        public function __construct(private readonly DeleteMedia $real) {}
+
+        public function handle(MediaAsset $asset): void
+        {
+            $this->real->handle($asset);
+
+            throw new RuntimeException('A listener failed after the commit');
+        }
+    });
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::Media))
+        ->tool(MediaDeleteTool::class, ['media_ids' => [$asset->id]])
+        ->assertOk()
+        ->assertStructuredContent(fn (AssertableJson $json): AssertableJson => $json
+            ->where('results.0.status', 'deleted')
+            ->etc());
+});

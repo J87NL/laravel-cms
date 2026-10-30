@@ -246,8 +246,9 @@ online. It does not help for files in an assistant's own sandbox, which have no 
   `HTTP_PROXY` is set: a proxy would resolve the name itself and undo the pinning. A server that can only reach the
   internet through a proxy cannot use `source_url`.
 - Redirects are followed by hand, at most 3, and every new address is checked the same way.
-- The whole download, redirects included, times out after 10 seconds and stops as soon as it passes `cms.media.max_upload_kilobytes`, also
-  when the server announces no `Content-Length`.
+- The whole download, redirects included, times out after 10 seconds and stops as soon as it passes
+  `cms.media.max_upload_kilobytes`, also when the server announces no `Content-Length`. On Guzzle 7, which cannot stop
+  a transfer from its progress callback, the size is checked while the body is stored.
 - `sha256` is checked against the downloaded file when given. The file name defaults to the last part of the address.
 - The file then goes through steps 4 and 5 above.
 

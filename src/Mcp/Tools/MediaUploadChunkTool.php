@@ -7,6 +7,7 @@ namespace J87NL\Cms\Mcp\Tools;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use J87NL\Cms\CmsPermission;
 use J87NL\Cms\Mcp\Concerns\InteractsWithCms;
 use J87NL\Cms\Mcp\ImageUploader;
@@ -78,21 +79,26 @@ class MediaUploadChunkTool extends Tool
         }
 
         $disk = Storage::disk(MediaUploadSession::disk());
+        $incoming = sprintf('%s.%s.incoming', $session->chunkPath($index), Str::random(8));
 
-        if (! $disk->put($session->chunkPath($index), $bytes)) {
+        if (! $disk->put($incoming, $bytes)) {
             return ImageUploader::storageFailed();
         }
 
         $stillOpen = MediaUploadSession::query()
             ->whereKey($session->id)
             ->whereNull('finishing_at')
-            ->update(['expires_at' => MediaUploadSession::newExpiry()]);
+            ->exists();
 
-        if ($stillOpen !== 1) {
-            $disk->delete($session->chunkPath($index));
+        if (! $stillOpen || ! $disk->move($incoming, $session->chunkPath($index))) {
+            $disk->delete($incoming);
 
             return Response::error(sprintf('Upload %s was finished or removed while chunk %d arrived, so the chunk was not kept.', $session->id, $index));
         }
+
+        MediaUploadSession::query()
+            ->whereKey($session->id)
+            ->update(['expires_at' => MediaUploadSession::newExpiry()]);
 
         return Response::structured([
             'message' => sprintf('Chunk %d of upload %s stored.', $index, $session->id),
@@ -103,7 +109,7 @@ class MediaUploadChunkTool extends Tool
 
     private function uploadNotFound(string $uploadId): Response
     {
-        return Response::error(sprintf('Upload %s was not found. It may have expired after an hour or been finished; start a new one with media_upload_start.', $uploadId));
+        return Response::error(sprintf('Upload %s was not found. It may have expired an hour after its last chunk, or been finished; start a new one with media_upload_start.', $uploadId));
     }
 
     /**

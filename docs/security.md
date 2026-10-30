@@ -112,7 +112,7 @@ The MCP tool `media_upload` takes images as base64 and refuses them over `cms.me
 they reach the disk. It reads the type from the content with `finfo`, never from the file name, so only JPEG, PNG, WebP
 and GIF pass and SVG (which could carry scripts) is refused. The image then goes through the same `UploadMedia` and GD
 re-encoding as an admin upload. Chunked uploads keep their chunks on a private disk, only for the user who started
-them, and expire after an hour.
+them, and expire an hour after their last chunk.
 
 `media_upload` with `source_url` downloads from public `https` addresses only. Every address the host resolves to,
 also after each of at most 3 redirects, must be public (no private, loopback, link-local, shared or reserved ranges,
