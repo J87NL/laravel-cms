@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace J87NL\Cms\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Carbon;
 use Spatie\Image\Enums\Fit;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
@@ -17,8 +17,8 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
  * @property string|null $caption
  * @property int $focal_x
  * @property int $focal_y
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
  */
 class MediaAsset extends Model implements HasMedia
 {

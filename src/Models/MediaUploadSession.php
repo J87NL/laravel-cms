@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace J87NL\Cms\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Carbon;
 
 /**
  * A chunked MCP image upload in progress. The chunks are files on the disk of cms.media.chunked_uploads.disk, in
@@ -19,10 +19,10 @@ use Illuminate\Support\Carbon;
  * @property int $size
  * @property string $sha256
  * @property array<string, mixed> $media_attributes
- * @property Carbon|null $finishing_at
- * @property Carbon $expires_at
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonInterface|null $finishing_at
+ * @property CarbonInterface $expires_at
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
  */
 class MediaUploadSession extends Model
 {
@@ -111,9 +111,10 @@ class MediaUploadSession extends Model
     }
 
     /**
-     * An upload expires this long after it started or after its last chunk.
+     * An upload expires this long after it started or after its last chunk. CarbonInterface, because an app may make
+     * now() return CarbonImmutable with Date::use().
      */
-    public static function newExpiry(): Carbon
+    public static function newExpiry(): CarbonInterface
     {
         return now()->addMinutes((int) config('cms.media.chunked_uploads.ttl_minutes', 60));
     }

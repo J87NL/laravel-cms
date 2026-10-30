@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace J87NL\Cms\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Carbon;
 use J87NL\Cms\Enums\RedirectSource;
 
 /**
@@ -14,10 +14,10 @@ use J87NL\Cms\Enums\RedirectSource;
  * @property string $to
  * @property int $status_code
  * @property int $hits
- * @property Carbon|null $last_hit_at
+ * @property CarbonInterface|null $last_hit_at
  * @property RedirectSource $source
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
  */
 class Redirect extends Model
 {

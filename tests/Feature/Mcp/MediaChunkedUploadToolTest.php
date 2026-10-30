@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
+use Carbon\CarbonImmutable;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Auth\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\Fluent\AssertableJson;
 use J87NL\Cms\CmsPermission;
@@ -471,3 +473,26 @@ it('leaves directories alone that are not upload directories', function (string 
     'the disk root' => ['/', ['invoices/2026.pdf', 'cms-media-uploads/notes/readme.txt']],
     'a directory with other content' => ['cms-media-uploads', ['invoices/2026.pdf', 'cms-media-uploads/notes/readme.txt']],
 ]);
+
+it('uploads in chunks when the app uses immutable dates', function (): void {
+    Date::use(CarbonImmutable::class);
+
+    try {
+        $file = noisyPng();
+        $user = cmsUser(CmsPermission::Media);
+        $uploadId = startUpload($user, $file);
+
+        foreach (chunksOf($file) as $index => $chunk) {
+            sendChunk($user, $uploadId, $index, $chunk)->assertOk();
+        }
+
+        CmsTestServer::actingAs($user)
+            ->tool(MediaUploadFinishTool::class, ['upload_id' => $uploadId])
+            ->assertOk();
+
+        expect(MediaAsset::query()->count())->toBe(1)
+            ->and(MediaUploadSession::query()->count())->toBe(0);
+    } finally {
+        Date::useDefault();
+    }
+});

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace J87NL\Cms\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 use J87NL\Cms\Blocks\BlockRegistry;
 use J87NL\Cms\Blocks\BlockType;
 
@@ -17,8 +17,8 @@ use J87NL\Cms\Blocks\BlockType;
  * @property array<string, mixed> $data
  * @property int $sort_order
  * @property bool $is_visible
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
  * @property-read Page $page
  */
 class Block extends Model

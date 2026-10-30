@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace J87NL\Cms\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Support\Carbon;
 use J87NL\Cms\Enums\PageStatus;
 
 /**
@@ -21,8 +21,8 @@ use J87NL\Cms\Enums\PageStatus;
  * @property string $title
  * @property string|null $menu_title
  * @property PageStatus $status
- * @property Carbon|null $publish_at
- * @property Carbon|null $unpublish_at
+ * @property CarbonInterface|null $publish_at
+ * @property CarbonInterface|null $unpublish_at
  * @property string|null $schedule_error
  * @property bool $is_home
  * @property int $sort_order
@@ -32,8 +32,8 @@ use J87NL\Cms\Enums\PageStatus;
  * @property string|null $canonical_url
  * @property bool $noindex
  * @property string|null $schema_type
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
  * @property-read Page|null $parent
  * @property-read Revision|null $pendingRevision
  */

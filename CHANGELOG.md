@@ -2,6 +2,20 @@
 
 All notable changes to this package are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.8.1] - 2026-10-30
+
+### Fixed
+
+- Apps that make `now()` and date casts return `CarbonImmutable` with `Date::use(CarbonImmutable::class)` hit a `TypeError` in three places that were declared for `Illuminate\Support\Carbon`:
+  - `cms:publish-scheduled` failed on every page with a planned moment, so scheduled pages were never published or taken offline (since 0.1). The run failed and reported the error, but the pages showed no schedule error.
+  - `SchedulePage::handle()` refused immutable moments.
+  - `media_upload_start` and `media_upload_chunk` (new in 0.8.0) failed, through `MediaUploadSession::newExpiry()`.
+  All three take or return `Carbon\CarbonInterface` now, and the date properties of the models are documented as `CarbonInterface`. Tests run scheduling and a chunked upload with immutable dates.
+
+### Upgrade notes
+
+- In an app with immutable dates, pages whose `publish_at` or `unpublish_at` has passed are published or taken offline on the first scheduler run after this update.
+
 ## [0.8.0] - 2026-10-30
 
 ### Added
@@ -203,6 +217,7 @@ First release, extracted from the j87.nl app.
 
 - Require `symfony/html-sanitizer` `^7.4.13|^8.0.13` for CVE-2026-45064, CVE-2026-45066, CVE-2026-45753, CVE-2026-48760 and CVE-2026-48761.
 
+[0.8.1]: https://github.com/J87NL/laravel-cms/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/J87NL/laravel-cms/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/J87NL/laravel-cms/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/J87NL/laravel-cms/compare/v0.5.1...v0.6.0

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace J87NL\Cms\Console;
 
+use Carbon\CarbonInterface;
 use Illuminate\Console\Command;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -84,7 +84,7 @@ class PublishScheduledPages extends Command
         }
     }
 
-    private function isDue(?Carbon $moment): bool
+    private function isDue(?CarbonInterface $moment): bool
     {
         return ! is_null($moment) && $moment->lessThanOrEqualTo(now());
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace J87NL\Cms\Findability;
 
+use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\Page;
@@ -37,7 +38,7 @@ class IndexablePages
 
     /**
      * @param  list<Page>  $pages
-     * @return array<int, Carbon>
+     * @return array<int, CarbonInterface>
      */
     public function lastModified(array $pages): array
     {

@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -54,6 +56,33 @@ test('the scheduler publishes and unpublishes pages when their moment has passed
         ->and($live->unpublish_at)->toBeNull();
     $this->get('/soon')->assertNotFound();
     $this->get('/ending')->assertNotFound();
+});
+
+test('scheduling and the scheduler work when the app uses immutable dates', function (): void {
+    Date::use(CarbonImmutable::class);
+
+    try {
+        makePage(['title' => 'Welcome', 'slug' => 'welcome'], home: true);
+        $draft = makePage(['title' => 'Coming soon', 'slug' => 'soon'], PageStatus::Draft);
+        $live = makePage(['title' => 'Ending', 'slug' => 'ending']);
+
+        app(SchedulePage::class)->handle($draft, now()->addHour(), now()->addHours(3));
+        app(SchedulePage::class)->handle($live, null, now()->addHours(2));
+
+        expect($draft->refresh()->publish_at)->toBeInstanceOf(CarbonImmutable::class);
+
+        $this->travel(61)->minutes();
+        $this->artisan('cms:publish-scheduled')->assertSuccessful();
+
+        expect($draft->refresh()->status)->toBe(PageStatus::Published);
+
+        $this->travel(60)->minutes();
+        $this->artisan('cms:publish-scheduled')->assertSuccessful();
+
+        expect($live->refresh()->status)->not->toBe(PageStatus::Published);
+    } finally {
+        Date::useDefault();
+    }
 });
 
 test('a schedule cannot lie in the past, end before it starts or take the home page offline', function (Closure $schedule): void {

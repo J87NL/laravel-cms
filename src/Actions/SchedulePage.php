@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace J87NL\Cms\Actions;
 
-use Illuminate\Support\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Validation\ValidationException;
 use J87NL\Cms\Models\Page;
 
 class SchedulePage
 {
-    public function handle(Page $page, ?Carbon $publishAt, ?Carbon $unpublishAt): void
+    public function handle(Page $page, ?CarbonInterface $publishAt, ?CarbonInterface $unpublishAt): void
     {
         if (! is_null($publishAt) && $page->isPublished()) {
             $publishAt = null;
@@ -32,7 +32,7 @@ class SchedulePage
         $page->save();
     }
 
-    private function assertCanUnpublish(Page $page, ?Carbon $publishAt, Carbon $unpublishAt): void
+    private function assertCanUnpublish(Page $page, ?CarbonInterface $publishAt, CarbonInterface $unpublishAt): void
     {
         if ($unpublishAt->isPast()) {
             throw ValidationException::withMessages([

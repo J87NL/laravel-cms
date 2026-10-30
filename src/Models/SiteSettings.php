@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace J87NL\Cms\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 use J87NL\Cms\Enums\EntityType;
 
 /**
@@ -27,8 +27,8 @@ use J87NL\Cms\Enums\EntityType;
  * @property string|null $contact_turnstile_site_key
  * @property string|null $contact_turnstile_secret_key
  * @property int|null $privacy_page_id
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
  * @property-read Page|null $privacyPage
  */
 class SiteSettings extends Model
