@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace J87NL\Cms\Media\Remote;
 
+use GuzzleHttp\Handler\CurlHandler;
 use GuzzleHttp\Psr7\Uri;
 use GuzzleHttp\Psr7\UriResolver;
 use Illuminate\Http\Client\ConnectionException;
@@ -13,11 +14,16 @@ use InvalidArgumentException;
 use Psr\Http\Message\StreamInterface;
 use Psr\Http\Message\UriInterface;
 use Symfony\Component\HttpFoundation\IpUtils;
+use Throwable;
 
 /**
  * Downloads a public image over https into a local file. Every address a host resolves to must be public, the
  * connection is pinned to the address that was checked (so DNS cannot be switched in between), redirects are
- * followed by hand and checked the same way, and the download stops as soon as it passes the size limit.
+ * followed by hand and checked the same way, and the download stops as soon as it passes the size limit or the time
+ * limit.
+ *
+ * The request always goes through Guzzle's curl handler, without a proxy: the stream handler and a proxy would both
+ * resolve the host name again, which would undo the pinning.
  */
 class RemoteImageDownloader
 {
@@ -28,8 +34,17 @@ class RemoteImageDownloader
     private const int READ_BYTES = 8192;
 
     /**
+     * IPv6 is only allowed in the global unicast range; IPv4 everywhere outside BLOCKED_RANGES.
+     *
+     * @var list<string>
+     */
+    private const array GLOBAL_IPV6 = [
+        '2000::/3',
+    ];
+
+    /**
      * Addresses that are not on the public internet: private, loopback, link-local, shared, reserved, documentation,
-     * benchmarking, multicast and translation ranges for IPv4 and IPv6.
+     * benchmarking, multicast and translation ranges.
      *
      * @var list<string>
      */
@@ -49,19 +64,10 @@ class RemoteImageDownloader
         '203.0.113.0/24',
         '224.0.0.0/4',
         '240.0.0.0/4',
-        '::/128',
-        '::1/128',
-        '::ffff:0:0/96',
-        '64:ff9b::/96',
-        '64:ff9b:1::/48',
-        '100::/64',
         '2001::/23',
         '2001:db8::/32',
         '2002::/16',
-        'fc00::/7',
-        'fe80::/10',
-        'fec0::/10',
-        'ff00::/8',
+        '3fff::/20',
     ];
 
     public function __construct(private readonly HostResolver $resolver) {}
@@ -73,10 +79,34 @@ class RemoteImageDownloader
      */
     public function download(string $url, string $targetPath, int $maxBytes): string
     {
-        $uri = $this->checkedUri($url);
+        try {
+            return $this->follow($this->checkedUri($url), $targetPath, $maxBytes, microtime(true) + self::TIMEOUT_SECONDS);
+        } catch (RemoteImageException $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            report($exception);
 
+            throw new RemoteImageException('The download from source_url failed, so nothing was uploaded. Check the address, or send the file as content_base64.');
+        }
+    }
+
+    public static function isPublic(string $address): bool
+    {
+        if (filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false && ! IpUtils::checkIp($address, self::GLOBAL_IPV6)) {
+            return false;
+        }
+
+        return filter_var($address, FILTER_VALIDATE_IP) !== false
+            && ! IpUtils::checkIp($address, self::BLOCKED_RANGES);
+    }
+
+    /**
+     * @throws RemoteImageException
+     */
+    private function follow(UriInterface $uri, string $targetPath, int $maxBytes, float $deadline): string
+    {
         for ($redirects = 0; ; $redirects++) {
-            $response = $this->request($uri);
+            $response = $this->request($uri, $maxBytes, $deadline);
 
             if ($response->redirect()) {
                 if ($redirects >= self::MAX_REDIRECTS) {
@@ -89,7 +119,13 @@ class RemoteImageDownloader
                     throw new RemoteImageException(sprintf('%s answered with a redirect without a Location, so nothing was downloaded.', $uri->getHost()));
                 }
 
-                $uri = $this->checkedUri((string) UriResolver::resolve($uri, new Uri($location)));
+                try {
+                    $next = UriResolver::resolve($uri, new Uri($location));
+                } catch (InvalidArgumentException) {
+                    throw new RemoteImageException(sprintf('%s redirected to an address that is not valid, so nothing was downloaded.', $uri->getHost()));
+                }
+
+                $uri = $this->checkedUri((string) $next);
 
                 continue;
             }
@@ -98,7 +134,7 @@ class RemoteImageDownloader
                 throw new RemoteImageException(sprintf('%s answered HTTP %d for source_url, so nothing was downloaded.', $uri->getHost(), $response->status()));
             }
 
-            $this->store($response->toPsrResponse()->getBody(), $targetPath, $maxBytes, (int) $response->header('Content-Length'));
+            $this->store($response->toPsrResponse()->getBody(), $targetPath, $maxBytes);
 
             return basename(rawurldecode($uri->getPath()));
         }
@@ -137,30 +173,71 @@ class RemoteImageDownloader
     /**
      * @throws RemoteImageException
      */
-    private function request(UriInterface $uri): Response
+    private function request(UriInterface $uri, int $maxBytes, float $deadline): Response
     {
         $host = trim($uri->getHost(), '[]');
         $address = $this->publicAddress($host);
-        $pinned = str_contains($address, ':') ? sprintf('[%s]', $address) : $address;
+        $secondsLeft = $deadline - microtime(true);
+
+        if ($secondsLeft <= 0) {
+            throw $this->timedOut($host);
+        }
+
+        $tooLarge = false;
 
         try {
-            $response = Http::withOptions([
-                'allow_redirects' => false,
-                'stream' => true,
-                'curl' => [
-                    CURLOPT_RESOLVE => [sprintf('%s:443:%s', $host, $pinned)],
-                    CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
-                ],
-            ])
-                ->connectTimeout(self::TIMEOUT_SECONDS)
-                ->timeout(self::TIMEOUT_SECONDS)
+            $response = Http::setHandler(new CurlHandler)
+                ->withOptions([
+                    'allow_redirects' => false,
+                    'proxy' => '',
+                    'curl' => $this->pinned($host, $address) + [
+                        CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+                        CURLOPT_NOPROGRESS => false,
+                        CURLOPT_PROGRESSFUNCTION => function (mixed $handle, int $downloadTotal, int $downloaded) use ($maxBytes, &$tooLarge): int {
+                            $tooLarge = $maxBytes > 0 && max($downloadTotal, $downloaded) > $maxBytes;
+
+                            return $tooLarge ? 1 : 0;
+                        },
+                    ],
+                ])
+                ->connectTimeout((int) max(1, ceil($secondsLeft)))
+                ->timeout((int) max(1, ceil($secondsLeft)))
                 ->accept('image/*')
                 ->get((string) $uri);
-        } catch (ConnectionException) {
-            throw new RemoteImageException(sprintf('%s could not be reached within %d seconds, so nothing was downloaded.', $host, self::TIMEOUT_SECONDS));
+        } catch (Throwable $exception) {
+            if ($tooLarge) {
+                throw $this->tooLarge($maxBytes);
+            }
+
+            if ($exception instanceof ConnectionException) {
+                throw $this->timedOut($host);
+            }
+
+            throw $exception;
+        }
+
+        if ($maxBytes > 0 && (int) $response->header('Content-Length') > $maxBytes) {
+            throw $this->tooLarge($maxBytes);
         }
 
         return $response;
+    }
+
+    /**
+     * Pins the host name to the checked address, so curl does not resolve it again. An address in the URL needs no
+     * pinning.
+     *
+     * @return array<int, list<string>>
+     */
+    private function pinned(string $host, string $address): array
+    {
+        if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
+            return [];
+        }
+
+        return [
+            CURLOPT_RESOLVE => [sprintf('%s:443:%s', $host, str_contains($address, ':') ? sprintf('[%s]', $address) : $address)],
+        ];
     }
 
     /**
@@ -183,21 +260,11 @@ class RemoteImageDownloader
         return $addresses[0];
     }
 
-    public static function isPublic(string $address): bool
-    {
-        return filter_var($address, FILTER_VALIDATE_IP) !== false
-            && ! IpUtils::checkIp($address, self::BLOCKED_RANGES);
-    }
-
     /**
      * @throws RemoteImageException
      */
-    private function store(StreamInterface $body, string $targetPath, int $maxBytes, int $contentLength): void
+    private function store(StreamInterface $body, string $targetPath, int $maxBytes): void
     {
-        if ($maxBytes > 0 && $contentLength > $maxBytes) {
-            throw $this->tooLarge($maxBytes);
-        }
-
         $target = fopen($targetPath, 'wb');
 
         if ($target === false) {
@@ -207,6 +274,10 @@ class RemoteImageDownloader
         $written = 0;
 
         try {
+            if ($body->isSeekable()) {
+                $body->rewind();
+            }
+
             while (! $body->eof()) {
                 $chunk = $body->read(self::READ_BYTES);
                 $written += strlen($chunk);
@@ -226,5 +297,10 @@ class RemoteImageDownloader
     private function tooLarge(int $maxBytes): RemoteImageException
     {
         return new RemoteImageException(sprintf('The image at source_url is larger than %d kB, so the download was stopped and nothing was uploaded.', intdiv($maxBytes, 1024)));
+    }
+
+    private function timedOut(string $host): RemoteImageException
+    {
+        return new RemoteImageException(sprintf('%s could not be reached or did not answer within %d seconds, so nothing was downloaded.', $host, self::TIMEOUT_SECONDS));
     }
 }

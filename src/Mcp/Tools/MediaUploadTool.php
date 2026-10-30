@@ -42,11 +42,9 @@ class MediaUploadTool extends Tool
             return $user;
         }
 
-        $maxKilobytes = ImageUploader::maxKilobytes();
-
         $input = $request->validate([
             'file_name' => ['required_without:source_url', 'nullable', 'string', 'max:255'],
-            'content_base64' => ['required_without:source_url', 'prohibits:source_url', 'nullable', 'string', ...($maxKilobytes > 0 ? [sprintf('max:%d', $this->maxEncodedLength($maxKilobytes))] : [])],
+            'content_base64' => ['required_without:source_url', 'prohibits:source_url', 'nullable', 'string', sprintf('max:%d', $this->maxEncodedLength(ImageUploader::maxBytes()))],
             'source_url' => ['nullable', 'string', 'max:2048'],
             'sha256' => ['nullable', 'string', 'regex:/^[0-9a-fA-F]{64}$/'],
             'alt' => ['required', 'string'],
@@ -76,10 +74,9 @@ class MediaUploadTool extends Tool
      */
     private function fromBase64(array $input, ImageUploader $uploader): MediaAsset|Response
     {
-        $maxKilobytes = ImageUploader::maxKilobytes();
         $encoded = (string) preg_replace('/\s+/', '', (string) preg_replace('/^data:[^,]*;base64,/i', '', trim((string) $input['content_base64'])));
 
-        if ($maxKilobytes > 0 && intdiv(strlen($encoded), 4) * 3 > $maxKilobytes * 1024 + 2) {
+        if (intdiv(strlen($encoded), 4) * 3 > ImageUploader::maxBytes() + 2) {
             return ImageUploader::tooLarge();
         }
 
@@ -113,7 +110,7 @@ class MediaUploadTool extends Tool
 
         try {
             try {
-                $urlFileName = $downloader->download((string) $input['source_url'], $path, ImageUploader::maxKilobytes() * 1024);
+                $urlFileName = $downloader->download((string) $input['source_url'], $path, ImageUploader::maxBytes());
             } catch (RemoteImageException $exception) {
                 return Response::error($exception->getMessage());
             }
@@ -160,8 +157,8 @@ class MediaUploadTool extends Tool
     /**
      * The longest content_base64 that can hold a file of the limit, with room for a data: URL prefix and line breaks.
      */
-    private function maxEncodedLength(int $maxKilobytes): int
+    private function maxEncodedLength(int $maxBytes): int
     {
-        return intdiv($maxKilobytes * 1024 + 2, 3) * 4 + 1024 + intdiv($maxKilobytes * 1024, 57) * 2;
+        return intdiv($maxBytes + 2, 3) * 4 + 1024 + intdiv($maxBytes, 57) * 2;
     }
 }

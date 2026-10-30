@@ -110,6 +110,14 @@ class MediaUploadSession extends Model
         return sprintf('%s/%05d.part', $this->directory(), $index);
     }
 
+    /**
+     * An upload expires this long after it started or after its last chunk.
+     */
+    public static function newExpiry(): Carbon
+    {
+        return now()->addMinutes((int) config('cms.media.chunked_uploads.ttl_minutes', 60));
+    }
+
     public static function disk(): string
     {
         return (string) config('cms.media.chunked_uploads.disk', 'local');

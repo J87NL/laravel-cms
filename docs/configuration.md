@@ -237,7 +237,7 @@ See [Contact form](contact-form.md).
 | `media.max_pixels` | `40000000` | Largest image in pixels (width times height) that an upload may have |
 | `media.chunked_uploads.disk` | `'local'` | Filesystem disk for the chunks of an MCP chunked upload; keep it private |
 | `media.chunked_uploads.directory` | `'cms-media-uploads'` | Directory on that disk; every upload gets a subdirectory |
-| `media.chunked_uploads.ttl_minutes` | `60` | Minutes after which an unfinished chunked upload expires |
+| `media.chunked_uploads.ttl_minutes` | `60` | Minutes after the start or the last chunk after which an unfinished chunked upload expires |
 | `media.chunked_uploads.max_open_per_user` | `5` | Open chunked uploads per user; `0` for no limit |
 | `media.widths` | `[480, 960, 1600]` | Widths of the WebP conversions |
 

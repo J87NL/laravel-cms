@@ -22,10 +22,11 @@ use Laravel\Mcp\Server\Attributes\Title;
 use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
+use Throwable;
 
 #[Name('media_delete')]
 #[Title('Delete CMS images')]
-#[Description('Permanently deletes images from the media library, with their files, when they are not in use anywhere: not in a block, not as the share image (og_image_id) of a page, not in a pending revision and not in the site settings. An image in use is refused and left alone. Every id is handled on its own, so one image in use or not found does not stop the others; each gets a status: deleted, in_use (with usage_count) or not_found. This cannot be undone, so confirm with the user first. Use media_list to see which images are in_use. Replacing the file of an image is only possible in the CMS admin.')]
+#[Description('Permanently deletes images from the media library, with their files, when they are not in use anywhere: not in a block, not as the share image (og_image_id) of a page, not in a pending revision and not in the site settings. An image in use is refused and left alone. Every id is handled on its own, so one image in use or not found does not stop the others; each gets a status: deleted, in_use (with usage_count), not_found or failed (an unexpected error; that image was not deleted, try it again later). This cannot be undone, so confirm with the user first. Use media_list to see which images are in_use. Replacing the file of an image is only possible in the CMS admin.')]
 #[IsReadOnly(false)]
 #[IsDestructive]
 class MediaDeleteTool extends Tool
@@ -44,7 +45,7 @@ class MediaDeleteTool extends Tool
 
         $input = $request->validate([
             'media_ids' => ['required', 'array', 'min:1', sprintf('max:%d', self::MAX_IDS)],
-            'media_ids.*' => ['required', 'integer', 'distinct'],
+            'media_ids.*' => ['required', 'integer:strict', 'distinct:strict'],
         ]);
 
         $results = [];
@@ -54,9 +55,10 @@ class MediaDeleteTool extends Tool
         }
 
         $deleted = count(array_filter($results, fn (array $result): bool => $result['status'] === 'deleted'));
+        $message = sprintf('%d of %d images deleted.', $deleted, count($results));
 
         return Response::structured([
-            'message' => sprintf('%d of %d images deleted. Images in use or not found were left alone.', $deleted, count($results)),
+            'message' => $deleted === count($results) ? $message : sprintf('%s The others were left alone; see the status per id.', $message),
             'results' => $results,
         ]);
     }
@@ -85,10 +87,16 @@ class MediaDeleteTool extends Tool
             return ['id' => $id, 'status' => 'not_found'];
         } catch (ValidationException $exception) {
             if (! array_key_exists('media', $exception->errors())) {
-                throw $exception;
+                report($exception);
+
+                return ['id' => $id, 'status' => 'failed', ...$details];
             }
 
-            return ['id' => $id, 'status' => 'in_use', ...$details, 'usage_count' => $mediaUsage->count($asset)];
+            return ['id' => $id, 'status' => 'in_use', ...$details, 'usage_count' => max(1, $mediaUsage->count($asset))];
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return ['id' => $id, 'status' => 'failed', ...$details];
         }
 
         return ['id' => $id, 'status' => 'deleted', ...$details];

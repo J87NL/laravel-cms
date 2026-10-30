@@ -8,6 +8,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\Fluent\AssertableJson;
 use J87NL\Cms\CmsPermission;
+use J87NL\Cms\Mcp\ImageUploader;
 use J87NL\Cms\Mcp\Tools\MediaUploadChunkTool;
 use J87NL\Cms\Mcp\Tools\MediaUploadFinishTool;
 use J87NL\Cms\Mcp\Tools\MediaUploadStartTool;
@@ -230,7 +231,7 @@ it('refuses a joined file whose sha256 does not match and keeps the upload', fun
 
     CmsTestServer::actingAs($user)
         ->tool(MediaUploadFinishTool::class, ['upload_id' => $uploadId])
-        ->assertHasErrors([sprintf('does not match the size and sha256 given to media_upload_start', strlen($file))]);
+        ->assertHasErrors(['does not match the size and sha256 given to media_upload_start']);
 
     $session = MediaUploadSession::query()->sole();
 
@@ -306,13 +307,18 @@ it('prunes expired uploads with their chunks and keeps open ones', function (): 
         ->and(Storage::disk('local')->allFiles())->toBe([MediaUploadSession::query()->sole()->chunkPath(0)]);
 });
 
-it('schedules the pruning every hour', function (): void {
+it('schedules the pruning every hour, also when the cms leaves page scheduling to the app', function (bool $schedulingEnabled): void {
+    config()->set('cms.scheduling.enabled', $schedulingEnabled);
+
     $events = collect(app(Schedule::class)->events())
         ->filter(fn ($event): bool => str_contains((string) $event->command, 'cms:prune-media-uploads'));
 
     expect($events)->toHaveCount(1)
         ->and($events->first()->expression)->toBe('0 * * * *');
-});
+})->with([
+    'page scheduling on' => [true],
+    'page scheduling off' => [false],
+]);
 
 it('refuses a start over the upload limit, with invalid attributes or past the open upload cap', function (): void {
     $user = cmsUser(CmsPermission::Media);
@@ -379,4 +385,76 @@ it('accepts a one-byte last chunk', function (): void {
     CmsTestServer::actingAs($user)
         ->tool(MediaUploadFinishTool::class, ['upload_id' => $uploadId])
         ->assertOk();
+});
+
+it('refuses a second finish and further chunks while an upload is being finished', function (): void {
+    $file = noisyPng();
+    $user = cmsUser(CmsPermission::Media);
+    $uploadId = startUpload($user, $file);
+
+    foreach (chunksOf($file) as $index => $chunk) {
+        sendChunk($user, $uploadId, $index, $chunk)->assertOk();
+    }
+
+    MediaUploadSession::query()->whereKey($uploadId)->update(['finishing_at' => now()]);
+
+    CmsTestServer::actingAs($user)
+        ->tool(MediaUploadFinishTool::class, ['upload_id' => $uploadId])
+        ->assertHasErrors([sprintf('Upload %s is already being finished.', $uploadId)]);
+
+    sendChunk($user, $uploadId, 0, chunksOf($file)[0])
+        ->assertHasErrors([sprintf('Upload %s is being finished, so it takes no more chunks.', $uploadId)]);
+
+    expect(MediaAsset::query()->count())->toBe(0);
+});
+
+it('refuses a joined file of the wrong size and keeps the upload', function (): void {
+    $file = noisyPng();
+    $user = cmsUser(CmsPermission::Media);
+    $uploadId = startUpload($user, $file);
+
+    foreach (chunksOf($file) as $index => $chunk) {
+        sendChunk($user, $uploadId, $index, $chunk)->assertOk();
+    }
+
+    $session = MediaUploadSession::query()->sole();
+    Storage::disk('local')->put($session->chunkPath(0), 'short');
+
+    CmsTestServer::actingAs($user)
+        ->tool(MediaUploadFinishTool::class, ['upload_id' => $uploadId])
+        ->assertHasErrors(['does not match the size and sha256 given to media_upload_start']);
+
+    expect($session->refresh()->finishing_at)->toBeNull();
+});
+
+it('keeps an upload open for an hour after its last chunk', function (): void {
+    $file = noisyPng();
+    $user = cmsUser(CmsPermission::Media);
+    $uploadId = startUpload($user, $file);
+    $chunks = chunksOf($file);
+
+    $this->travel(50)->minutes();
+    sendChunk($user, $uploadId, 0, $chunks[0])->assertOk();
+
+    $this->travel(50)->minutes();
+    sendChunk($user, $uploadId, 1, $chunks[1])->assertOk();
+
+    $this->travel(61)->minutes();
+    sendChunk($user, $uploadId, 2, $chunks[2])->assertHasErrors(['was not found']);
+});
+
+it('prunes chunk directories that have no upload', function (): void {
+    Storage::disk('local')->put('cms-media-uploads/0199c2a0-0000-7000-8000-000000000000/00000.part', 'left behind');
+
+    $this->artisan('cms:prune-media-uploads')->assertSuccessful();
+
+    expect(Storage::disk('local')->allFiles())->toBe([]);
+});
+
+it('keeps a hard limit on chunked uploads when the upload limit is off', function (): void {
+    config()->set('cms.media.max_upload_kilobytes', 0);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::Media))
+        ->tool(MediaUploadStartTool::class, ['file_name' => 'a.png', 'size' => ImageUploader::HARD_MAX_BYTES + 1, 'sha256' => str_repeat('a', 64), 'alt' => 'A'])
+        ->assertHasErrors([sprintf('The image is larger than %d kB', ImageUploader::HARD_MAX_BYTES / 1024)]);
 });

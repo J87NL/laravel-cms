@@ -170,7 +170,7 @@ pending revision again, so `pending_revision` is `null` in that response.
 | `media_upload_start` | `file_name`, `size` (bytes), `sha256` of the whole file, `alt` (all required), `caption`, `focal_x`, `focal_y`. Returns `upload_id`, `chunk_bytes`, `chunk_count` and `expires_at` |
 | `media_upload_chunk` | `upload_id`, `index` (0-based), `content_base64` and the chunk's `sha256` (all required) |
 | `media_upload_finish` | `upload_id`. Returns the new image under `media`, like `media_upload` |
-| `media_delete` | `media_ids` (1 to 25 distinct ids). Returns `results`: per id its `status` (`deleted`, `in_use` or `not_found`), and for deleted and in-use images `alt` and `file_name`, plus `usage_count` when in use |
+| `media_delete` | `media_ids` (1 to 25 distinct ids). Returns `results`: per id its `status` (`deleted`, `in_use`, `not_found` or `failed`), and for deleted and in-use images `alt` and `file_name`, plus `usage_count` when in use |
 
 ### Uploading images
 
@@ -214,16 +214,21 @@ its own instead of the whole file:
 
 An upload is a `J87NL\Cms\Models\MediaUploadSession` row (`cms_media_upload_sessions`) with its chunks in a directory
 of its own on the disk `cms.media.chunked_uploads.disk`. It belongs to the user who started it: for anyone else, and
-after it expired (`cms.media.chunked_uploads.ttl_minutes`, default 60), it is not found. A user can have at most
+after it expired (`cms.media.chunked_uploads.ttl_minutes`, default 60, counted from the start and again from every
+stored chunk), it is not found. A user can have at most
 `cms.media.chunked_uploads.max_open_per_user` (default 5) open uploads. The command `cms:prune-media-uploads`, which
-the package schedules every hour, deletes expired uploads with their chunks.
+the package schedules every hour (also when `cms.scheduling.enabled` is `false`), deletes expired uploads with their
+chunks and chunk directories that have no upload. Disk use is only bounded while the scheduler runs. A chunk that
+arrives while its upload is being finished is not kept. When `cms.media.max_upload_kilobytes` is `0`, MCP uploads
+still stop at `ImageUploader::HARD_MAX_BYTES` (64 MB).
 
 #### Deleting images
 
 `media_delete` deletes images through [`DeleteMedia`](media.md#deleting), one id at a time, so an image in use or a
 missing id does not stop the others. `DeleteMedia` refuses an image that `MediaUsage` counts as used (blocks, page
 `og_image_id`, pending revisions and the site settings); the tool reports it as `in_use` with its usage count and
-leaves it and its files alone. A deleted image loses its media rows and its files, which are removed after the delete
+leaves it and its files alone. Any other error for one id is reported (`report()`) and comes back as `failed` for that
+id, after which the other ids are still handled, so the client always learns which images were deleted. A deleted image loses its media rows and its files, which are removed after the delete
 commits. Deleting cannot be undone, so the tool is marked destructive and its description asks the assistant to
 confirm with the user first; `media_list` shows `in_use` per image.
 
@@ -234,10 +239,14 @@ online. It does not help for files in an assistant's own sandbox, which have no 
 
 - Only `https` on port 443, without a user name or password.
 - The host must resolve, and every address it resolves to must be public: private, loopback, link-local, shared
-  (100.64.0.0/10), reserved, documentation, multicast and IPv6 translation ranges are refused, for IPv4 and IPv6. The
-  connection is pinned to the address that was checked, so the name cannot be resolved again to another address.
+  (100.64.0.0/10), reserved, documentation, benchmarking and multicast IPv4 ranges are refused, and IPv6 is only
+  allowed in global unicast (`2000::/3`) outside its translation and documentation ranges. The connection is pinned to
+  the address that was checked (`CURLOPT_RESOLVE`), so the name cannot be resolved again to another address.
+- The request always goes through Guzzle's curl handler and never through a proxy, also when `HTTPS_PROXY` or
+  `HTTP_PROXY` is set: a proxy would resolve the name itself and undo the pinning. A server that can only reach the
+  internet through a proxy cannot use `source_url`.
 - Redirects are followed by hand, at most 3, and every new address is checked the same way.
-- The download times out after 10 seconds and stops as soon as it passes `cms.media.max_upload_kilobytes`, also
+- The whole download, redirects included, times out after 10 seconds and stops as soon as it passes `cms.media.max_upload_kilobytes`, also
   when the server announces no `Content-Length`.
 - `sha256` is checked against the downloaded file when given. The file name defaults to the last part of the address.
 - The file then goes through steps 4 and 5 above.

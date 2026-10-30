@@ -116,8 +116,8 @@ them, and expire after an hour.
 
 `media_upload` with `source_url` downloads from public `https` addresses only. Every address the host resolves to,
 also after each of at most 3 redirects, must be public (no private, loopback, link-local, shared or reserved ranges,
-for IPv4 and IPv6), and the connection is pinned to the checked address, so DNS rebinding cannot reach an internal
-service. The download times out after 10 seconds and stops past the size limit. See
+for IPv4 and IPv6), and the connection is pinned to the checked address with curl, without a proxy, so DNS rebinding
+cannot reach an internal service. The download times out after 10 seconds and stops past the size limit. See
 [MCP tools](mcp-tools.md#downloading-from-source_url).
 
 ## Contact form

@@ -78,28 +78,26 @@ class MediaUploadFinishTool extends Tool
         }
 
         try {
-            if (! $this->join($session, $path)) {
-                $this->release($session);
+            $joined = $this->checkedJoin($session, $path);
+        } catch (Throwable $exception) {
+            $this->release($session);
+            unlink($path);
 
-                return ImageUploader::storageFailed();
-            }
+            throw $exception;
+        }
 
-            if (filesize($path) !== $session->size || ! ImageUploader::matchesSha256((string) hash_file('sha256', $path), $session->sha256)) {
-                $this->release($session);
+        if ($joined instanceof Response) {
+            $this->release($session);
+            unlink($path);
 
-                return Response::error(sprintf('The joined file of upload %s (%d bytes) does not match the size and sha256 given to media_upload_start, so nothing was stored. Check those values and the order of the chunks, then send the wrong chunks again or start over.', $session->id, (int) filesize($path)));
-            }
+            return $joined;
+        }
 
-            try {
-                $asset = $uploader->fromPath($path, $session->file_name, $session->media_attributes);
-            } catch (Throwable $exception) {
-                $this->discard($session);
-
-                throw $exception;
-            }
-
-            $this->discard($session);
+        try {
+            $asset = $uploader->fromPath($path, $session->file_name, $session->media_attributes);
         } finally {
+            $this->discard($session);
+
             if (is_file($path)) {
                 unlink($path);
             }
@@ -140,6 +138,24 @@ class MediaUploadFinishTool extends Tool
         $listed = implode(', ', array_slice($indexes, 0, self::LISTED_MISSING));
 
         return count($indexes) > self::LISTED_MISSING ? sprintf('%s and %d more', $listed, count($indexes) - self::LISTED_MISSING) : $listed;
+    }
+
+    /**
+     * Joins the chunks into $path; a Response when the joined file cannot be used, null when it matches.
+     */
+    private function checkedJoin(MediaUploadSession $session, string $path): ?Response
+    {
+        if (! $this->join($session, $path)) {
+            return ImageUploader::storageFailed();
+        }
+
+        $size = (int) filesize($path);
+
+        if ($size !== $session->size || ! ImageUploader::matchesSha256((string) hash_file('sha256', $path), $session->sha256)) {
+            return Response::error(sprintf('The joined file of upload %s (%d bytes) does not match the size and sha256 given to media_upload_start, so nothing was stored. Check those values and the order of the chunks, then send the wrong chunks again or start over.', $session->id, $size));
+        }
+
+        return null;
     }
 
     private function join(MediaUploadSession $session, string $path): bool

@@ -77,8 +77,21 @@ class MediaUploadChunkTool extends Tool
             return Response::error(sprintf('Chunk %d holds %d bytes, but it must hold %d bytes of the file, so it was not stored.', $index, strlen($bytes), $session->chunkSize($index)));
         }
 
-        if (! Storage::disk(MediaUploadSession::disk())->put($session->chunkPath($index), $bytes)) {
+        $disk = Storage::disk(MediaUploadSession::disk());
+
+        if (! $disk->put($session->chunkPath($index), $bytes)) {
             return ImageUploader::storageFailed();
+        }
+
+        $stillOpen = MediaUploadSession::query()
+            ->whereKey($session->id)
+            ->whereNull('finishing_at')
+            ->update(['expires_at' => MediaUploadSession::newExpiry()]);
+
+        if ($stillOpen !== 1) {
+            $disk->delete($session->chunkPath($index));
+
+            return Response::error(sprintf('Upload %s was finished or removed while chunk %d arrived, so the chunk was not kept.', $session->id, $index));
         }
 
         return Response::structured([

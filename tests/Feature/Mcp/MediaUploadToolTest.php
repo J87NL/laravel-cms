@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
@@ -9,6 +10,7 @@ use Illuminate\Testing\Fluent\AssertableJson;
 use J87NL\Cms\CmsPermission;
 use J87NL\Cms\Mcp\Tools\MediaUploadTool;
 use J87NL\Cms\Media\Remote\HostResolver;
+use J87NL\Cms\Media\Remote\RemoteImageDownloader;
 use J87NL\Cms\Models\MediaAsset;
 use J87NL\Cms\Tests\Fixtures\Mcp\CmsTestServer;
 
@@ -403,4 +405,89 @@ it('takes either content_base64 or source_url, not both and not neither', functi
 })->with([
     'both' => [['file_name' => 'logo.png', 'content_base64' => 'aGFsbG8=', 'source_url' => 'https://example.com/logo.png'], 'content base64 field prohibits source url'],
     'neither' => [['file_name' => 'logo.png'], 'content base64 field is required when source url is not present'],
+]);
+
+it('pins the connection to the checked address, without a proxy or the stream handler', function (): void {
+    fakeDns(['images.example.com' => ['93.184.216.34'], '2606:2800:220:1:248:1893:25c8:1946' => []]);
+    $seen = [];
+    $png = UploadedFile::fake()->image('logo.png', 10, 10)->getContent();
+
+    Http::fake(function (HttpRequest $request, array $options) use (&$seen, $png) {
+        $seen[] = $options;
+
+        return Http::response($png);
+    });
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::Media))
+        ->tool(MediaUploadTool::class, ['source_url' => 'https://images.example.com/logo.png', 'alt' => 'Logo'])
+        ->assertOk();
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::Media))
+        ->tool(MediaUploadTool::class, ['source_url' => 'https://[2606:2800:220:1:248:1893:25c8:1946]/logo.png', 'alt' => 'Logo'])
+        ->assertOk();
+
+    expect($seen)->toHaveCount(2)
+        ->and($seen[0]['curl'][CURLOPT_RESOLVE])->toBe(['images.example.com:443:93.184.216.34'])
+        ->and($seen[0]['curl'][CURLOPT_PROTOCOLS])->toBe(CURLPROTO_HTTPS)
+        ->and($seen[0]['proxy'])->toBe('')
+        ->and($seen[0]['allow_redirects'])->toBeFalse()
+        ->and($seen[0]['stream'] ?? false)->toBeFalse()
+        ->and($seen[1]['curl'])->not->toHaveKey(CURLOPT_RESOLVE);
+});
+
+it('resolves a relative redirect against the current address', function (): void {
+    fakeDns(['example.com' => ['93.184.216.34']]);
+    Http::fake([
+        'https://example.com/old/logo' => Http::response('', 302, ['Location' => '../new/logo.png']),
+        'https://example.com/new/logo.png' => Http::response(UploadedFile::fake()->image('logo.png', 10, 10)->getContent()),
+    ]);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::Media))
+        ->tool(MediaUploadTool::class, ['source_url' => 'https://example.com/old/logo', 'alt' => 'Logo'])
+        ->assertOk();
+
+    expect(MediaAsset::query()->sole()->file()?->file_name)->toBe('logo.png');
+});
+
+it('turns transport failures into a refusal sentence', function (Closure $answer, string $message): void {
+    fakeDns(['example.com' => ['93.184.216.34']]);
+    Http::fake(['https://example.com/*' => $answer]);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::Media))
+        ->tool(MediaUploadTool::class, ['source_url' => 'https://example.com/logo.png', 'alt' => 'Logo'])
+        ->assertHasErrors([$message]);
+
+    expect(MediaAsset::query()->count())->toBe(0);
+})->with([
+    'connection failure' => [fn () => fn () => throw new ConnectionException('cURL error 28'), 'example.com could not be reached or did not answer within 10 seconds'],
+    'any other failure' => [fn () => fn () => throw new RuntimeException('TLS went wrong'), 'The download from source_url failed, so nothing was uploaded.'],
+    'malformed Location' => [fn () => Http::response('', 302, ['Location' => 'https://exa mple.com:99999/x']), 'redirected to an address that is not valid'],
+]);
+
+it('only treats public addresses as public', function (string $address, bool $public): void {
+    expect(RemoteImageDownloader::isPublic($address))->toBe($public);
+})->with([
+    'public ipv4' => ['93.184.216.34', true],
+    'public ipv6' => ['2606:2800:220:1:248:1893:25c8:1946', true],
+    'loopback' => ['127.0.0.1', false],
+    'private' => ['172.16.5.4', false],
+    'link-local' => ['169.254.169.254', false],
+    'carrier-grade nat' => ['100.64.1.1', false],
+    'benchmarking' => ['198.18.0.1', false],
+    'multicast' => ['224.0.0.1', false],
+    'ipv6 loopback' => ['::1', false],
+    'ipv6 unspecified' => ['::', false],
+    'ipv4-mapped' => ['::ffff:127.0.0.1', false],
+    'ipv4-compatible' => ['::127.0.0.1', false],
+    'ipv4-translated' => ['::ffff:0:7f00:1', false],
+    'nat64' => ['64:ff9b::7f00:1', false],
+    '6to4' => ['2002:7f00:1::1', false],
+    'teredo' => ['2001:0:4136:e378::1', false],
+    'unique local' => ['fd00::1', false],
+    'link-local ipv6' => ['fe80::1', false],
+    'documentation ipv6' => ['2001:db8::1', false],
+    'new documentation ipv6' => ['3fff::1', false],
+    'srv6' => ['5f00::1', false],
+    'ipv6 multicast' => ['ff02::1', false],
+    'not an address' => ['example.com', false],
 ]);

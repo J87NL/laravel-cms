@@ -18,6 +18,12 @@ class ImageUploader
 {
     public const string TEMPORARY_PREFIX = 'cms-mcp-upload-';
 
+    /**
+     * The ceiling for MCP uploads when cms.media.max_upload_kilobytes is 0, so a chunked upload or a download is never
+     * unbounded.
+     */
+    public const int HARD_MAX_BYTES = 64 * 1024 * 1024;
+
     public function __construct(private readonly UploadMedia $uploadMedia) {}
 
     public static function maxKilobytes(): int
@@ -25,16 +31,21 @@ class ImageUploader
         return (int) config('cms.media.max_upload_kilobytes', 10240);
     }
 
-    public static function exceedsLimit(int $bytes): bool
+    public static function maxBytes(): int
     {
         $maxKilobytes = self::maxKilobytes();
 
-        return $maxKilobytes > 0 && $bytes > $maxKilobytes * 1024;
+        return $maxKilobytes > 0 ? $maxKilobytes * 1024 : self::HARD_MAX_BYTES;
+    }
+
+    public static function exceedsLimit(int $bytes): bool
+    {
+        return $bytes > self::maxBytes();
     }
 
     public static function tooLarge(): Response
     {
-        return Response::error(sprintf('The image is larger than %d kB, so nothing was uploaded. Upload a smaller image.', self::maxKilobytes()));
+        return Response::error(sprintf('The image is larger than %d kB, so nothing was uploaded. Upload a smaller image.', intdiv(self::maxBytes(), 1024)));
     }
 
     public static function checksumMismatch(int $receivedBytes, string $subject = 'The upload'): Response

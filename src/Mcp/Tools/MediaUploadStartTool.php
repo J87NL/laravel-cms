@@ -24,7 +24,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('media_upload_start')]
 #[Title('Start a chunked CMS image upload')]
-#[Description('Starts a chunked image upload, for a file that is large or has long repetitive runs (such as a palette PNG), where one long base64 string in media_upload easily gets damaged. Pass file_name, size (the number of bytes), sha256 (the SHA-256 of the whole file) and the image fields alt, caption, focal_x and focal_y. Returns an upload_id, the chunk size and the number of chunks. Then send every chunk with media_upload_chunk (a damaged chunk is refused on its own, so only that one is sent again) and finish with media_upload_finish. An upload expires after an hour.')]
+#[Description('Starts a chunked image upload, for a file that is large or has long repetitive runs (such as a palette PNG), where one long base64 string in media_upload easily gets damaged. Pass file_name, size (the number of bytes), sha256 (the SHA-256 of the whole file) and the image fields alt, caption, focal_x and focal_y. Returns an upload_id, the chunk size and the number of chunks. Then send every chunk with media_upload_chunk (a damaged chunk is refused on its own, so only that one is sent again) and finish with media_upload_finish. An upload expires an hour after its last chunk.')]
 #[IsReadOnly(false)]
 #[IsDestructive(false)]
 class MediaUploadStartTool extends Tool
@@ -70,7 +70,7 @@ class MediaUploadStartTool extends Tool
                 'size' => (int) $input['size'],
                 'sha256' => strtolower((string) $input['sha256']),
                 'media_attributes' => $attributes,
-                'expires_at' => now()->addMinutes((int) config('cms.media.chunked_uploads.ttl_minutes', 60)),
+                'expires_at' => MediaUploadSession::newExpiry(),
             ]);
 
         return Response::structured([

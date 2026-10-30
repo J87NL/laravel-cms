@@ -12,7 +12,7 @@ class PruneMediaUploadsCommand extends Command
 {
     protected $signature = 'cms:prune-media-uploads';
 
-    protected $description = 'Delete chunked MCP image uploads that expired before they were finished, with their chunks';
+    protected $description = 'Delete chunked MCP image uploads that expired before they were finished, with their chunks, and chunk directories without an upload';
 
     public function handle(): int
     {
@@ -26,6 +26,15 @@ class PruneMediaUploadsCommand extends Command
                 $session->delete();
                 $pruned++;
             });
+
+        $known = MediaUploadSession::query()->pluck('id')->all();
+        $base = rtrim((string) config('cms.media.chunked_uploads.directory', 'cms-media-uploads'), '/');
+
+        foreach ($disk->directories($base) as $directory) {
+            if (! in_array(basename($directory), $known, true)) {
+                $disk->deleteDirectory($directory);
+            }
+        }
 
         $this->info(sprintf('Pruned %d expired media uploads.', $pruned));
 

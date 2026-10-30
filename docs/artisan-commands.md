@@ -27,13 +27,15 @@ does not. Run this command after every deploy. See [Page cache](page-cache.md).
 
 ## `cms:prune-media-uploads`
 
-Deletes chunked MCP image uploads that expired before `media_upload_finish`, with their chunks:
+Deletes chunked MCP image uploads that expired before `media_upload_finish`, with their chunks, and chunk directories
+that have no upload:
 
 ```bash
 php artisan cms:prune-media-uploads
 ```
 
-The command has no options. The package schedules it every hour, without overlapping. See
+The command has no options. The package schedules it every hour, without overlapping, also when
+`cms.scheduling.enabled` is `false`. See
 [MCP tools](mcp-tools.md#chunked-uploads).
 
 ## Publishing files
