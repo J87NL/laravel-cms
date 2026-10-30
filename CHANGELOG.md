@@ -2,6 +2,28 @@
 
 All notable changes to this package are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.8.0] - 2026-10-30
+
+### Added
+
+- An optional `sha256` on `media_upload`: the SHA-256 of the file bytes before encoding. The decoded bytes are checked against it before anything else, and a mismatch is refused as a damaged transfer ("The upload arrived damaged: the sha256 checksum does not match the N bytes that were received"), so a miscopied base64 string no longer looks like an unreadable image. Without `sha256` nothing changes.
+- Chunked uploads through three new MCP tools, for large files or files with long repetitive runs: `media_upload_start` (file name, size, `sha256` of the whole file and the image fields; returns an `upload_id` and the chunk count), `media_upload_chunk` (one chunk of `MediaUploadSession::CHUNK_BYTES`, 2048 bytes, as base64 with its own `sha256`; a damaged chunk is refused on its own and sending an index again replaces it) and `media_upload_finish` (lists missing chunks, checks the whole file's size and `sha256`, then runs the same type check and `UploadMedia` as `media_upload`). All three need `cms.media` and a full grant and are not marked destructive.
+- Uploads are `J87NL\Cms\Models\MediaUploadSession` rows in the new table `cms_media_upload_sessions`, with their chunks on the disk `cms.media.chunked_uploads.disk` (default `local`) under `cms.media.chunked_uploads.directory`. An upload belongs to the user who started it; for others it is not found. It expires after `cms.media.chunked_uploads.ttl_minutes` (default 60), and a user can have at most `cms.media.chunked_uploads.max_open_per_user` (default 5) open uploads.
+- The command `cms:prune-media-uploads`, scheduled every hour, deletes expired uploads with their chunks.
+- `source_url` on `media_upload`, instead of `content_base64`, for an image that is already online. Only public `https` on port 443: every address the host resolves to must be public (private, loopback, link-local, shared, reserved, documentation, multicast and IPv6 translation ranges are refused), also after each of at most 3 redirects, and the connection is pinned to the checked address. The download times out after 10 seconds and stops past `cms.media.max_upload_kilobytes`. `file_name` defaults to the last part of the address. Host names are resolved by the new contract `J87NL\Cms\Media\Remote\HostResolver`, bound to `DnsHostResolver` unless the app binds its own.
+
+### Changed
+
+- The descriptions of `media_upload` and `Cms::mcpInstructions()` mention `sha256`, the chunked tools and `source_url`. `Cms::mcpTools()` now returns 26 tools.
+- The last step of every MCP upload (type check with `finfo`, then `UploadMedia`) lives in `J87NL\Cms\Mcp\ImageUploader`.
+
+### Upgrade notes
+
+- Run `php artisan migrate` for the `cms_media_upload_sessions` table.
+- Run the Laravel scheduler (it already runs for `cms:publish-scheduled`) so expired chunked uploads are pruned.
+- The chunk disk must be private; the default `local` disk is. An app with a published `config/cms.php` gets the new `chunked_uploads` keys from the package defaults.
+- `media_upload` with `source_url` makes outgoing https requests from the app server. Block it in your firewall if you do not want that; the address checks already keep it away from internal networks.
+
 ## [0.7.0] - 2026-10-29
 
 ### Added
@@ -178,6 +200,7 @@ First release, extracted from the j87.nl app.
 
 - Require `symfony/html-sanitizer` `^7.4.13|^8.0.13` for CVE-2026-45064, CVE-2026-45066, CVE-2026-45753, CVE-2026-48760 and CVE-2026-48761.
 
+[0.8.0]: https://github.com/J87NL/laravel-cms/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/J87NL/laravel-cms/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/J87NL/laravel-cms/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/J87NL/laravel-cms/compare/v0.5.0...v0.5.1

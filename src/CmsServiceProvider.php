@@ -22,12 +22,15 @@ use J87NL\Cms\Blocks\Types\RichTextBlock;
 use J87NL\Cms\Blocks\Types\TextWithImageBlock;
 use J87NL\Cms\Cache\FlushPageCache;
 use J87NL\Cms\Console\FlushPageCacheCommand;
+use J87NL\Cms\Console\PruneMediaUploadsCommand;
 use J87NL\Cms\Console\PublishScheduledPages;
 use J87NL\Cms\Contact\ContactFormLimiter;
 use J87NL\Cms\Contact\SiteSettingsTurnstileKeys;
 use J87NL\Cms\Contact\TurnstileKeys;
 use J87NL\Cms\Html\RichTextSanitizer;
 use J87NL\Cms\Mcp\BlockTypeSummary;
+use J87NL\Cms\Media\Remote\DnsHostResolver;
+use J87NL\Cms\Media\Remote\HostResolver;
 use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\MediaAsset;
 use J87NL\Cms\Models\Menu;
@@ -89,6 +92,7 @@ class CmsServiceProvider extends ServiceProvider
         $this->app->singleton(FlushPageCache::class);
         $this->app->scoped(BlockTypeSummary::class);
         $this->app->bindIf(TurnstileKeys::class, SiteSettingsTurnstileKeys::class);
+        $this->app->bindIf(HostResolver::class, DnsHostResolver::class);
 
         $this->registerPermissions();
     }
@@ -116,11 +120,16 @@ class CmsServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 FlushPageCacheCommand::class,
+                PruneMediaUploadsCommand::class,
                 PublishScheduledPages::class,
             ]);
         }
 
         $this->callAfterResolving(Schedule::class, function (Schedule $schedule): void {
+            $schedule->command(PruneMediaUploadsCommand::class)
+                ->hourly()
+                ->withoutOverlapping();
+
             if (! config('cms.scheduling.enabled', true)) {
                 return;
             }

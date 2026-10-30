@@ -25,6 +25,17 @@ php artisan cms:flush-page-cache
 The command has no options. Content changes flush the cache by themselves, but a changed layout, view or translation
 does not. Run this command after every deploy. See [Page cache](page-cache.md).
 
+## `cms:prune-media-uploads`
+
+Deletes chunked MCP image uploads that expired before `media_upload_finish`, with their chunks:
+
+```bash
+php artisan cms:prune-media-uploads
+```
+
+The command has no options. The package schedules it every hour, without overlapping. See
+[MCP tools](mcp-tools.md#chunked-uploads).
+
 ## Publishing files
 
 | Command | Copies |

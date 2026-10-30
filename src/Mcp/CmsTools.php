@@ -13,6 +13,9 @@ use J87NL\Cms\Mcp\Tools\BlocksReorderTool;
 use J87NL\Cms\Mcp\Tools\BlockUpdateLiveTool;
 use J87NL\Cms\Mcp\Tools\BlockUpdateTool;
 use J87NL\Cms\Mcp\Tools\MediaListTool;
+use J87NL\Cms\Mcp\Tools\MediaUploadChunkTool;
+use J87NL\Cms\Mcp\Tools\MediaUploadFinishTool;
+use J87NL\Cms\Mcp\Tools\MediaUploadStartTool;
 use J87NL\Cms\Mcp\Tools\MediaUploadTool;
 use J87NL\Cms\Mcp\Tools\MenuItemSaveTool;
 use J87NL\Cms\Mcp\Tools\MenuItemsListTool;
@@ -45,6 +48,9 @@ class CmsTools
         PageGetTool::class,
         MediaListTool::class,
         MediaUploadTool::class,
+        MediaUploadStartTool::class,
+        MediaUploadChunkTool::class,
+        MediaUploadFinishTool::class,
         MenuItemsListTool::class,
         RedirectsListTool::class,
         PageDraftCreateTool::class,
@@ -83,7 +89,9 @@ class CmsTools
         - Pages with a planned publication (publish_at) cannot be changed with these tools.
         - block_add lists the block types and their fields in its description; a validation error names the field.
         - Images come from media_list; use their id in block data (media_id, media_ids) or as og_image_id. media_upload
-          adds a PNG, JPEG, WebP or GIF image (base64, with alt text) and returns its id.
+          adds a PNG, JPEG, WebP or GIF image (base64 with alt text, or a public https source_url) and returns its id.
+          Pass sha256 so a damaged transfer is reported as such. For a large or repetitive file, use
+          media_upload_start, media_upload_chunk and media_upload_finish: a damaged chunk is resent on its own.
         - menu_item_save may link a menu item to any page, but the item only shows while that page is published.
         - redirect_save and redirect_delete take effect on the live site immediately; confirm with the user first.
         MARKDOWN;

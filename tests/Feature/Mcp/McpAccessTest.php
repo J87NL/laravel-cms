@@ -16,6 +16,7 @@ use J87NL\Cms\Mcp\Tools\BlocksReorderTool;
 use J87NL\Cms\Mcp\Tools\BlockUpdateLiveTool;
 use J87NL\Cms\Mcp\Tools\BlockUpdateTool;
 use J87NL\Cms\Mcp\Tools\MediaListTool;
+use J87NL\Cms\Mcp\Tools\MediaUploadStartTool;
 use J87NL\Cms\Mcp\Tools\MediaUploadTool;
 use J87NL\Cms\Mcp\Tools\MenuItemSaveTool;
 use J87NL\Cms\Mcp\Tools\MenuItemsListTool;
@@ -32,6 +33,7 @@ use J87NL\Cms\Mcp\Tools\RedirectsListTool;
 use J87NL\Cms\Mcp\Tools\RevisionDiscardTool;
 use J87NL\Cms\Models\Block;
 use J87NL\Cms\Models\MediaAsset;
+use J87NL\Cms\Models\MediaUploadSession;
 use J87NL\Cms\Models\MenuItem;
 use J87NL\Cms\Models\Page;
 use J87NL\Cms\Models\Redirect;
@@ -75,6 +77,7 @@ function cmsWriteTools(): array
         'menu_item_save' => [MenuItemSaveTool::class, CmsPermission::Menus, fn (): array => ['menu' => 'main', 'url' => '/contact', 'label' => 'Contact']],
         'redirect_save' => [RedirectSaveTool::class, CmsPermission::Redirects, fn (): array => ['from_path' => '/oud', 'to' => '/nieuw']],
         'redirect_delete' => [RedirectDeleteTool::class, CmsPermission::Redirects, fn (): array => ['redirect_id' => makeRedirect('oud', '/nieuw')->id]],
+        'media_upload_start' => [MediaUploadStartTool::class, CmsPermission::Media, fn (): array => ['file_name' => 'foto.png', 'size' => 100, 'sha256' => str_repeat('a', 64), 'alt' => 'Een foto']],
         'media_upload' => [MediaUploadTool::class, CmsPermission::Media, fn (): array => ['file_name' => 'foto.png', 'content_base64' => pngBase64(), 'alt' => 'Een foto']],
     ];
 }
@@ -123,6 +126,8 @@ function cmsContentCounts(): array
         'redirects' => Redirect::query()
             ->count(),
         'media' => MediaAsset::query()
+            ->count(),
+        'media_upload_sessions' => MediaUploadSession::query()
             ->count(),
     ];
 }

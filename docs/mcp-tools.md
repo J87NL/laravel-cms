@@ -38,7 +38,7 @@ clients that do not read the server instructions.
 `boot()` runs before every request is handled. Keep the server's own instructions in the `$instructions` property:
 an `#[Instructions]` attribute takes precedence over the property and would drop the CMS guidance.
 
-The package ships 23 tools. `laravel/mcp` lists 15 tools per `tools/list` page by default, so set
+The package ships 26 tools. `laravel/mcp` lists 15 tools per `tools/list` page by default, so set
 `public int $defaultPaginationLength = 50;` on the server when the client or hub does not follow `nextCursor`.
 
 ## The tools
@@ -49,6 +49,9 @@ The package ships 23 tools. `laravel/mcp` lists 15 tools per `tools/list` page b
 | `page_get` | yes | no | `cms.pages.edit` |
 | `media_list` | yes | no | `cms.media` |
 | `media_upload` | no | no | `cms.media` |
+| `media_upload_start` | no | no | `cms.media` |
+| `media_upload_chunk` | no | no | `cms.media` |
+| `media_upload_finish` | no | no | `cms.media` |
 | `menu_items_list` | yes | no | `cms.menus` |
 | `redirects_list` | yes | no | `cms.redirects` |
 | `page_draft_create` | no | no | `cms.pages.edit` |
@@ -162,7 +165,10 @@ pending revision again, so `pending_revision` is `null` in that response.
 | `menu_item_save` | `menu` (required), `item_id`, `page_id` or `url`, `label`, `parent_id`. On an update, omitted fields keep their value |
 | `redirect_save` | `redirect_id`, `from_path` and `to` (required), `status_code` (`301` or `302`). A new redirect defaults to `301`; on an update, an omitted status code keeps its current value |
 | `redirect_delete` | `redirect_id` |
-| `media_upload` | `file_name`, `content_base64`, `alt` (all required), `caption`, `focal_x`, `focal_y` (0 to 100, default 50). Returns the new image under `media`, in the shape of `media_list` |
+| `media_upload` | `content_base64` with `file_name`, or `source_url` (one of the two, not both); `alt` (required); `sha256`, `caption`, `focal_x`, `focal_y` (0 to 100, default 50). Returns the new image under `media`, in the shape of `media_list` |
+| `media_upload_start` | `file_name`, `size` (bytes), `sha256` of the whole file, `alt` (all required), `caption`, `focal_x`, `focal_y`. Returns `upload_id`, `chunk_bytes`, `chunk_count` and `expires_at` |
+| `media_upload_chunk` | `upload_id`, `index` (0-based), `content_base64` and the chunk's `sha256` (all required) |
+| `media_upload_finish` | `upload_id`. Returns the new image under `media`, like `media_upload` |
 
 ### Uploading images
 
@@ -171,18 +177,62 @@ pending revision again, so `pending_revision` is `null` in that response.
 
 1. `content_base64` holds the file bytes, base64 encoded. A `data:…;base64,` prefix and whitespace are stripped;
    anything else that is not valid base64 is refused.
-2. The size is checked against `cms.media.max_upload_kilobytes` before the bytes are decoded and again after, so an
+2. With `sha256` (64 hexadecimal characters, the SHA-256 of the file before encoding), the decoded bytes are checked
+   against it first. A mismatch is refused as a damaged transfer, with the number of bytes that arrived, so the client
+   can tell a miscopied base64 string from a bad image. Without `sha256` nothing changes. Clients should send it:
+   long base64 strings, above all with repetitive runs such as palette PNGs, are sometimes miscopied by a language
+   model, and without the checksum that shows up as an unreadable image.
+3. The size is checked against `cms.media.max_upload_kilobytes` before the bytes are decoded and again after, so an
    oversized file never reaches the disk.
-3. The bytes go to a temporary file whose type is read with `finfo`. Only `MediaAsset::ACCEPTED_MIME_TYPES` (JPEG,
+4. The bytes go to a temporary file whose type is read with `finfo`. Only `MediaAsset::ACCEPTED_MIME_TYPES` (JPEG,
    PNG, WebP and GIF) pass, whatever `file_name` says; SVG and HTML are refused. The stored file name is the slug of
    `file_name` with the extension of the real type, so JPEG content named `foto.png` is stored as `foto.jpg`.
-4. [`UploadMedia`](media.md#uploading) does the rest, exactly as for an admin upload: the attribute rules of
+5. [`UploadMedia`](media.md#uploading) does the rest, exactly as for an admin upload: the attribute rules of
    `MediaRules`, re-encoding with `ImageCleaner` (no metadata, no animated GIF, the pixel limit) and the queued WebP
    conversions. Until the queue has run, `url` points to the original.
 
 The temporary file is removed after both a success and a refusal. Refusals come back as an error result with a
-sentence. The tool is not marked destructive, because a new image changes nothing that visitors see until a block
-uses it.
+sentence. The upload tools are not marked destructive, because a new image changes nothing that visitors see until a
+block uses it.
+
+#### Chunked uploads
+
+For a large file, or one that keeps arriving damaged, a client uploads it in chunks, so a miscopied chunk is resent on
+its own instead of the whole file:
+
+1. `media_upload_start` takes the file name, its `size` in bytes, the `sha256` of the whole file and the image fields.
+   It checks the size against `cms.media.max_upload_kilobytes` and the fields against `MediaRules`, and returns an
+   `upload_id` and the number of chunks. Every chunk holds `MediaUploadSession::CHUNK_BYTES` (2048) bytes of the
+   file, the last one the rest.
+2. `media_upload_chunk` takes one chunk as base64 with its own `sha256`. A chunk whose checksum or size does not match
+   is refused and not stored; the other chunks stay. Sending an index again replaces it.
+3. `media_upload_finish` lists the missing indexes when chunks are missing. Otherwise it joins the chunks, checks the
+   size and `sha256` of the whole file and runs steps 4 and 5 above. A checksum mismatch keeps the upload, so wrong
+   chunks can be sent again; a refused file type or image ends it.
+
+An upload is a `J87NL\Cms\Models\MediaUploadSession` row (`cms_media_upload_sessions`) with its chunks in a directory
+of its own on the disk `cms.media.chunked_uploads.disk`. It belongs to the user who started it: for anyone else, and
+after it expired (`cms.media.chunked_uploads.ttl_minutes`, default 60), it is not found. A user can have at most
+`cms.media.chunked_uploads.max_open_per_user` (default 5) open uploads. The command `cms:prune-media-uploads`, which
+the package schedules every hour, deletes expired uploads with their chunks.
+
+#### Downloading from source_url
+
+Instead of `content_base64`, `media_upload` takes `source_url`, a public `https://` address of an image that is already
+online. It does not help for files in an assistant's own sandbox, which have no public address.
+
+- Only `https` on port 443, without a user name or password.
+- The host must resolve, and every address it resolves to must be public: private, loopback, link-local, shared
+  (100.64.0.0/10), reserved, documentation, multicast and IPv6 translation ranges are refused, for IPv4 and IPv6. The
+  connection is pinned to the address that was checked, so the name cannot be resolved again to another address.
+- Redirects are followed by hand, at most 3, and every new address is checked the same way.
+- The download times out after 10 seconds and stops as soon as it passes `cms.media.max_upload_kilobytes`, also
+  when the server announces no `Content-Length`.
+- `sha256` is checked against the downloaded file when given. The file name defaults to the last part of the address.
+- The file then goes through steps 4 and 5 above.
+
+The host names are resolved by `J87NL\Cms\Media\Remote\HostResolver`, bound to `DnsHostResolver` unless the app
+binds its own.
 
 The descriptions of `block_add` and `block_update` list the registered block types with their translated label and
 their data fields, built from each type's `label()` and `rules()`, so custom block types appear there too.
@@ -192,7 +242,7 @@ their data fields, built from each type's `label()` and `rules()`, so custom blo
 ## Rules the tools follow
 
 - No tool schedules, makes a home page, deletes pages or deletes or replaces media files; those stay in the CMS admin.
-  `media_upload` only adds new images.
+  The upload tools only add new images.
 - Pages with a planned publication (`publish_at`) are read-only for every page and block tool, also for a user who may
   publish. `pages_list` and `page_get` report this as `writable`.
 - When the app defines the `cms.pages.write` gate, the direct writes check it with the page: every live tool, and the

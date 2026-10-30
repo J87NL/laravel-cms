@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace J87NL\Cms\Mcp\Tools;
 
-use finfo;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Illuminate\Http\UploadedFile;
 use Illuminate\JsonSchema\Types\Type;
-use J87NL\Cms\Actions\UploadMedia;
 use J87NL\Cms\CmsPermission;
 use J87NL\Cms\Mcp\CmsPresenter;
 use J87NL\Cms\Mcp\Concerns\InteractsWithCms;
+use J87NL\Cms\Mcp\ImageUploader;
+use J87NL\Cms\Media\Remote\RemoteImageDownloader;
+use J87NL\Cms\Media\Remote\RemoteImageException;
 use J87NL\Cms\Models\MediaAsset;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -25,18 +25,16 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('media_upload')]
 #[Title('Upload a CMS image')]
-#[Description('Uploads an image to the media library and returns it with its id; use that id in block data (media_id, media_ids) or as og_image_id. Pass the file as base64 in content_base64 (a data: URL prefix is allowed) with its file_name. Accepts PNG, JPEG, WebP and GIF (no SVG, no animated GIF); the type is read from the content, not from the file name. alt text is required. The image is re-encoded without its metadata. The smaller WebP versions are made by the queue, so the original is served until the queue has run. Deleting or replacing images is only possible in the CMS admin.')]
+#[Description('Uploads an image to the media library and returns it with its id; use that id in block data (media_id, media_ids) or as og_image_id. Pass the file either as base64 in content_base64 (a data: URL prefix is allowed) with its file_name, or as source_url, a public https:// address of an image that is already online. Pass sha256, the SHA-256 of the file bytes before encoding, so a damaged transfer is refused as such instead of as an unreadable image. For a large file, or one with long repetitive runs such as a palette PNG, use media_upload_start, media_upload_chunk and media_upload_finish instead. Accepts PNG, JPEG, WebP and GIF (no SVG, no animated GIF); the type is read from the content, not from the file name. alt text is required. The image is re-encoded without its metadata. The smaller WebP versions are made by the queue, so the original is served until the queue has run. Deleting or replacing images is only possible in the CMS admin.')]
 #[IsReadOnly(false)]
 #[IsDestructive(false)]
 class MediaUploadTool extends Tool
 {
     use InteractsWithCms;
 
-    private const string TEMPORARY_PREFIX = 'cms-mcp-upload-';
-
     public function __construct(private readonly CmsPresenter $presenter) {}
 
-    public function handle(Request $request, UploadMedia $uploadMedia): Response|ResponseFactory
+    public function handle(Request $request, ImageUploader $uploader, RemoteImageDownloader $downloader): Response|ResponseFactory
     {
         $user = $this->authorizeWrite($request, CmsPermission::Media);
 
@@ -44,62 +42,27 @@ class MediaUploadTool extends Tool
             return $user;
         }
 
-        $maxKilobytes = (int) config('cms.media.max_upload_kilobytes', 10240);
+        $maxKilobytes = ImageUploader::maxKilobytes();
 
         $input = $request->validate([
-            'file_name' => ['required', 'string', 'max:255'],
-            'content_base64' => ['required', 'string', ...($maxKilobytes > 0 ? [sprintf('max:%d', $this->maxEncodedLength($maxKilobytes))] : [])],
+            'file_name' => ['required_without:source_url', 'nullable', 'string', 'max:255'],
+            'content_base64' => ['required_without:source_url', 'prohibits:source_url', 'nullable', 'string', ...($maxKilobytes > 0 ? [sprintf('max:%d', $this->maxEncodedLength($maxKilobytes))] : [])],
+            'source_url' => ['nullable', 'string', 'max:2048'],
+            'sha256' => ['nullable', 'string', 'regex:/^[0-9a-fA-F]{64}$/'],
             'alt' => ['required', 'string'],
             'caption' => ['nullable', 'string'],
             'focal_x' => ['nullable', 'integer'],
             'focal_y' => ['nullable', 'integer'],
+        ], [
+            'sha256.regex' => 'sha256 must be the SHA-256 of the file as 64 hexadecimal characters.',
         ]);
 
-        $encoded = (string) preg_replace('/\s+/', '', (string) preg_replace('/^data:[^,]*;base64,/i', '', trim((string) $input['content_base64'])));
-        if ($maxKilobytes > 0 && intdiv(strlen($encoded), 4) * 3 > $maxKilobytes * 1024 + 2) {
-            return $this->tooLarge($maxKilobytes);
-        }
+        $asset = filled($input['source_url'] ?? null)
+            ? $this->fromUrl($input, $uploader, $downloader)
+            : $this->fromBase64($input, $uploader);
 
-        $bytes = base64_decode($encoded, true);
-
-        if ($bytes === false || $bytes === '') {
-            return Response::error('content_base64 is not valid base64. Pass the bytes of the image file in standard base64 (A-Z, a-z, 0-9, + and /, padded with =).');
-        }
-
-        if ($maxKilobytes > 0 && strlen($bytes) > $maxKilobytes * 1024) {
-            return $this->tooLarge($maxKilobytes);
-        }
-
-        $path = tempnam(sys_get_temp_dir(), self::TEMPORARY_PREFIX);
-
-        if ($path === false) {
-            return Response::error('The image could not be stored temporarily, so nothing was uploaded. Try again later.');
-        }
-
-        try {
-            if (file_put_contents($path, $bytes) !== strlen($bytes)) {
-                return Response::error('The image could not be stored temporarily, so nothing was uploaded. Try again later.');
-            }
-
-            $mimeType = (string) (new finfo(FILEINFO_MIME_TYPE))->file($path);
-
-            if (! in_array($mimeType, MediaAsset::ACCEPTED_MIME_TYPES, true)) {
-                return Response::error(sprintf('The content is %s, which the media library does not accept. Upload a PNG, JPEG, WebP or GIF image; the type is read from the content, not from the file name.', $mimeType === '' ? 'of an unknown type' : $mimeType));
-            }
-
-            $asset = $uploadMedia->handle(
-                new UploadedFile($path, (string) $input['file_name'], $mimeType, null, true),
-                array_filter([
-                    'alt' => $input['alt'],
-                    'caption' => $input['caption'] ?? null,
-                    'focal_x' => $input['focal_x'] ?? null,
-                    'focal_y' => $input['focal_y'] ?? null,
-                ], fn (mixed $value): bool => ! is_null($value)),
-            );
-        } finally {
-            if (is_file($path)) {
-                unlink($path);
-            }
+        if ($asset instanceof Response) {
+            return $asset;
         }
 
         return Response::structured([
@@ -109,13 +72,76 @@ class MediaUploadTool extends Tool
     }
 
     /**
+     * @param  array<string, mixed>  $input
+     */
+    private function fromBase64(array $input, ImageUploader $uploader): MediaAsset|Response
+    {
+        $maxKilobytes = ImageUploader::maxKilobytes();
+        $encoded = (string) preg_replace('/\s+/', '', (string) preg_replace('/^data:[^,]*;base64,/i', '', trim((string) $input['content_base64'])));
+
+        if ($maxKilobytes > 0 && intdiv(strlen($encoded), 4) * 3 > $maxKilobytes * 1024 + 2) {
+            return ImageUploader::tooLarge();
+        }
+
+        $bytes = base64_decode($encoded, true);
+
+        if ($bytes === false || $bytes === '') {
+            return Response::error('content_base64 is not valid base64. Pass the bytes of the image file in standard base64 (A-Z, a-z, 0-9, + and /, padded with =).');
+        }
+
+        if (filled($input['sha256'] ?? null) && ! ImageUploader::matchesSha256(hash('sha256', $bytes), (string) $input['sha256'])) {
+            return ImageUploader::checksumMismatch(strlen($bytes));
+        }
+
+        if (ImageUploader::exceedsLimit(strlen($bytes))) {
+            return ImageUploader::tooLarge();
+        }
+
+        return $uploader->fromBytes($bytes, (string) $input['file_name'], $input);
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     */
+    private function fromUrl(array $input, ImageUploader $uploader, RemoteImageDownloader $downloader): MediaAsset|Response
+    {
+        $path = tempnam(sys_get_temp_dir(), ImageUploader::TEMPORARY_PREFIX);
+
+        if ($path === false) {
+            return ImageUploader::storageFailed();
+        }
+
+        try {
+            try {
+                $urlFileName = $downloader->download((string) $input['source_url'], $path, ImageUploader::maxKilobytes() * 1024);
+            } catch (RemoteImageException $exception) {
+                return Response::error($exception->getMessage());
+            }
+
+            if (filled($input['sha256'] ?? null) && ! ImageUploader::matchesSha256((string) hash_file('sha256', $path), (string) $input['sha256'])) {
+                return ImageUploader::checksumMismatch((int) filesize($path), 'The image at source_url');
+            }
+
+            $fileName = filled($input['file_name'] ?? null) ? (string) $input['file_name'] : $urlFileName;
+
+            return $uploader->fromPath($path, $fileName === '' ? 'image' : $fileName, $input);
+        } finally {
+            if (is_file($path)) {
+                unlink($path);
+            }
+        }
+    }
+
+    /**
      * @return array<string, Type>
      */
     public function schema(JsonSchema $schema): array
     {
         return [
-            'file_name' => $schema->string()->description('The original file name with its extension, for example "github.png". The stored file name is derived from it.')->required(),
-            'content_base64' => $schema->string()->description($this->contentDescription())->required(),
+            'file_name' => $schema->string()->description('The original file name with its extension, for example "github.png". The stored file name is derived from it. Required with content_base64; with source_url it defaults to the last part of the address.'),
+            'content_base64' => $schema->string()->description($this->contentDescription()),
+            'source_url' => $schema->string()->description('Instead of content_base64: a public https:// address of the image, for example one already on a website. Private and local addresses are refused, at most 3 redirects are followed and the download stops after 10 seconds or past the size limit. Files in your own sandbox have no public address; send those as content_base64 or in chunks.'),
+            'sha256' => $schema->string()->description('Optional but recommended: the SHA-256 of the file bytes before base64 encoding, as 64 hexadecimal characters. A mismatch is refused as a damaged transfer, with the number of bytes that arrived.'),
             'alt' => $schema->string()->description('The alt text that describes the image, at most 250 characters.')->required(),
             'caption' => $schema->string()->description('An optional caption, at most 500 characters.'),
             'focal_x' => $schema->integer()->description('The horizontal focal point in percent (0 to 100) for cropping; the centre when left out.'),
@@ -137,10 +163,5 @@ class MediaUploadTool extends Tool
     private function maxEncodedLength(int $maxKilobytes): int
     {
         return intdiv($maxKilobytes * 1024 + 2, 3) * 4 + 1024 + intdiv($maxKilobytes * 1024, 57) * 2;
-    }
-
-    private function tooLarge(int $maxKilobytes): Response
-    {
-        return Response::error(sprintf('The image is larger than %d kB, so nothing was uploaded. Upload a smaller image.', $maxKilobytes));
     }
 }

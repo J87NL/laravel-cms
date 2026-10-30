@@ -111,7 +111,14 @@ Uploaded images are decoded and encoded again with GD, which drops EXIF data suc
 The MCP tool `media_upload` takes images as base64 and refuses them over `cms.media.max_upload_kilobytes` before
 they reach the disk. It reads the type from the content with `finfo`, never from the file name, so only JPEG, PNG, WebP
 and GIF pass and SVG (which could carry scripts) is refused. The image then goes through the same `UploadMedia` and GD
-re-encoding as an admin upload. See [MCP tools](mcp-tools.md#uploading-images).
+re-encoding as an admin upload. Chunked uploads keep their chunks on a private disk, only for the user who started
+them, and expire after an hour.
+
+`media_upload` with `source_url` downloads from public `https` addresses only. Every address the host resolves to,
+also after each of at most 3 redirects, must be public (no private, loopback, link-local, shared or reserved ranges,
+for IPv4 and IPv6), and the connection is pinned to the checked address, so DNS rebinding cannot reach an internal
+service. The download times out after 10 seconds and stops past the size limit. See
+[MCP tools](mcp-tools.md#downloading-from-source_url).
 
 ## Contact form
 

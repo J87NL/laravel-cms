@@ -98,6 +98,12 @@ return [
         'disk' => 'public',
         'max_upload_kilobytes' => 10240,
         'max_pixels' => 40_000_000,
+        'chunked_uploads' => [
+            'disk' => 'local',
+            'directory' => 'cms-media-uploads',
+            'ttl_minutes' => 60,
+            'max_open_per_user' => 5,
+        ],
         'widths' => [
             480,
             960,

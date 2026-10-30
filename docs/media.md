@@ -85,7 +85,8 @@ stays in the `replaced` collection, and the next replacement of the asset tries 
 the [page cache](page-cache.md).
 
 Files are only replaced (and deleted) in the admin; there is no MCP tool for that. Assistants can add new images with
-the MCP tool [`media_upload`](mcp-tools.md#uploading-images), which takes the file as base64 and calls `UploadMedia`
+the MCP tool [`media_upload`](mcp-tools.md#uploading-images) (or in chunks with `media_upload_start`, `media_upload_chunk`
+and `media_upload_finish`), which takes the file as base64 or from a public https address and calls `UploadMedia`
 with the same checks as an admin upload.
 
 ## Using an asset
