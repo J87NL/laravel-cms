@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace J87NL\Cms\Media\Remote;
 
 /**
- * Counts the bytes written to a download file and refuses the write that passes the limit.
+ * Counts the bytes written to a download file and tells LimitedWriteFilter to drop the bytes past the limit.
  */
 class DownloadLimit
 {

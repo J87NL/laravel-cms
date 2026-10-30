@@ -246,7 +246,8 @@ online. It does not help for files in an assistant's own sandbox, which have no 
   `HTTP_PROXY` is set: a proxy would resolve the name itself and undo the pinning. A server that can only reach the
   internet through a proxy cannot use `source_url`.
 - Redirects are followed by hand, at most 3, and every new address is checked the same way.
-- The whole download, redirects included, times out after 10 seconds and stops as soon as it passes
+- The whole download, redirects included, times out after 10 seconds (resolving the host names is not part of that
+  time; a failed lookup is not retried) and stops as soon as it passes
   `cms.media.max_upload_kilobytes`, also when the server announces no `Content-Length`: the progress callback stops
   the transfer on Guzzle 7 and 8 alike, and the body goes straight to a temporary file through a stream filter that
   drops every byte past the limit. The image is asked for uncompressed (`Accept-Encoding: identity`) and never

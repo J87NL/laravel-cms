@@ -62,6 +62,38 @@ class TransferOptions
         return $options;
     }
 
+    /**
+     * Runs the request. On Guzzle 7 the raw progress options raise two deprecation notices per request; they are
+     * swallowed here, so an app that turns deprecations into exceptions can still download. Every other error goes to
+     * the handler that was set before.
+     *
+     * @template TResult
+     *
+     * @param  Closure(): TResult  $send
+     * @return TResult
+     */
+    public static function send(Closure $send, ?int $guzzleMajorVersion = null): mixed
+    {
+        if (($guzzleMajorVersion ?? self::guzzleMajorVersion()) >= 8) {
+            return $send();
+        }
+
+        $previous = null;
+        $previous = set_error_handler(function (int $level, string $message, string $file = '', int $line = 0) use (&$previous): bool {
+            if ($level === E_USER_DEPRECATED && preg_match('/CURLOPT_(NOPROGRESS|PROGRESSFUNCTION)\b/', $message) === 1) {
+                return true;
+            }
+
+            return is_callable($previous) ? (bool) $previous($level, $message, $file, $line) : false;
+        });
+
+        try {
+            return $send();
+        } finally {
+            restore_error_handler();
+        }
+    }
+
     public static function guzzleMajorVersion(): int
     {
         return defined(ClientInterface::class.'::MAJOR_VERSION') ? (int) constant(ClientInterface::class.'::MAJOR_VERSION') : 7;
