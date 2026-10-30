@@ -247,8 +247,9 @@ online. It does not help for files in an assistant's own sandbox, which have no 
   internet through a proxy cannot use `source_url`.
 - Redirects are followed by hand, at most 3, and every new address is checked the same way.
 - The whole download, redirects included, times out after 10 seconds and stops as soon as it passes
-  `cms.media.max_upload_kilobytes`, also when the server announces no `Content-Length`. On Guzzle 7, which cannot stop
-  a transfer from its progress callback, the size is checked while the body is stored.
+  `cms.media.max_upload_kilobytes`, also when the server announces no `Content-Length`. The body is written straight
+  to a temporary file through a stream filter that counts the bytes after content decoding and fails the write past
+  the limit, so curl stops the transfer on Guzzle 7 and 8 alike and a compressed body cannot slip past it.
 - `sha256` is checked against the downloaded file when given. The file name defaults to the last part of the address.
 - The file then goes through steps 4 and 5 above.
 

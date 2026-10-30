@@ -438,6 +438,9 @@ it('pins the connection to the checked address, without a proxy or the stream ha
         ->and($seen[1]['curl'])->not->toHaveKey(CURLOPT_RESOLVE);
 
     foreach ($seen as $options) {
+        expect($options['sink'])->toBeResource();
+        unset($options['sink']);
+
         $easy = (new CurlFactory(1))->create(new GuzzleRequest('GET', 'https://images.example.com/logo.png'), $options);
         curl_close($easy->handle);
     }
@@ -499,3 +502,39 @@ it('only treats public addresses as public', function (string $address, bool $pu
     'ipv6 multicast' => ['ff02::1', false],
     'not an address' => ['example.com', false],
 ]);
+
+it('stops a body that grows past the limit after decoding, and a large redirect body is not kept', function (): void {
+    fakeDns(['example.com' => ['93.184.216.34']]);
+    config()->set('cms.media.max_upload_kilobytes', 1);
+    Http::fake([
+        'https://example.com/redirect' => Http::response(str_repeat('r', 900), 302, ['Location' => 'https://example.com/logo.png']),
+        'https://example.com/logo.png' => Http::response(UploadedFile::fake()->image('logo.png', 5, 5)->getContent()),
+        'https://example.com/bomb.png' => Http::response(str_repeat('a', 5000), 200, ['Content-Length' => '40', 'Content-Encoding' => 'gzip']),
+    ]);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::Media))
+        ->tool(MediaUploadTool::class, ['source_url' => 'https://example.com/bomb.png', 'alt' => 'Bom'])
+        ->assertHasErrors(['larger than 1 kB, so the download was stopped']);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::Media))
+        ->tool(MediaUploadTool::class, ['source_url' => 'https://example.com/redirect', 'alt' => 'Logo'])
+        ->assertOk();
+
+    expect(MediaAsset::query()->sole()->width())->toBe(5);
+});
+
+it('refuses past the limit from the progress callback, with the arguments Guzzle passes', function (): void {
+    fakeDns(['example.com' => ['93.184.216.34']]);
+    config()->set('cms.media.max_upload_kilobytes', 1);
+    Http::fake(function (HttpRequest $request, array $options) {
+        if ($options['progress'](0, 2048, 0, 0) === true) {
+            throw new RuntimeException('The transfer was aborted by the progress callback');
+        }
+
+        return Http::response('never');
+    });
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::Media))
+        ->tool(MediaUploadTool::class, ['source_url' => 'https://example.com/big.png', 'alt' => 'Groot'])
+        ->assertHasErrors(['larger than 1 kB, so the download was stopped']);
+});

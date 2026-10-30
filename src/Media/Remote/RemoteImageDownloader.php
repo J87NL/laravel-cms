@@ -11,7 +11,6 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
-use Psr\Http\Message\StreamInterface;
 use Psr\Http\Message\UriInterface;
 use Symfony\Component\HttpFoundation\IpUtils;
 use Throwable;
@@ -24,16 +23,15 @@ use Throwable;
  *
  * The request always goes through Guzzle's curl handler, without a proxy: the stream handler and a proxy would both
  * resolve the host name again, which would undo the pinning. Only CURLOPT_RESOLVE is passed as a curl option; Guzzle 8
- * refuses curl options it has a request option for. The progress callback stops a download past the size limit on
- * Guzzle 8; Guzzle 7 ignores its answer, so there the time limit and store() bound the download.
+ * refuses curl options it has a request option for. The body goes straight into the target file through
+ * LimitedWriteFilter, which stops the transfer past the size limit on Guzzle 7 and 8 and counts decoded bytes; the
+ * progress callback stops it even earlier on Guzzle 8.
  */
 class RemoteImageDownloader
 {
     public const int MAX_REDIRECTS = 3;
 
     public const int TIMEOUT_SECONDS = 10;
-
-    private const int READ_BYTES = 8192;
 
     /**
      * IPv6 is only allowed in the global unicast range; IPv4 everywhere outside BLOCKED_RANGES.
@@ -108,7 +106,7 @@ class RemoteImageDownloader
     private function follow(UriInterface $uri, string $targetPath, int $maxBytes, float $deadline): string
     {
         for ($redirects = 0; ; $redirects++) {
-            $response = $this->request($uri, $maxBytes, $deadline);
+            $response = $this->request($uri, $targetPath, $maxBytes, $deadline);
 
             if ($response->redirect()) {
                 if ($redirects >= self::MAX_REDIRECTS) {
@@ -135,8 +133,6 @@ class RemoteImageDownloader
             if (! $response->successful()) {
                 throw new RemoteImageException(sprintf('%s answered HTTP %d for source_url, so nothing was downloaded.', $uri->getHost(), $response->status()));
             }
-
-            $this->store($response->toPsrResponse()->getBody(), $targetPath, $maxBytes);
 
             return basename(rawurldecode($uri->getPath()));
         }
@@ -175,28 +171,36 @@ class RemoteImageDownloader
     /**
      * @throws RemoteImageException
      */
-    private function request(UriInterface $uri, int $maxBytes, float $deadline): Response
+    /**
+     * Requests $uri and writes its body to $targetPath (replacing what an earlier redirect wrote there).
+     *
+     * @throws RemoteImageException
+     */
+    private function request(UriInterface $uri, string $targetPath, int $maxBytes, float $deadline): Response
     {
         $host = trim($uri->getHost(), '[]');
         $address = $this->publicAddress($host);
         $secondsLeft = $deadline - microtime(true);
 
-        if ($secondsLeft <= 0) {
+        if ($secondsLeft < 0.001) {
             throw $this->timedOut($host);
         }
 
-        $tooLarge = false;
+        $limit = new DownloadLimit($maxBytes);
+        $sink = $this->sink($targetPath, $limit);
+        $wireTooLarge = false;
 
         try {
             $response = Http::setHandler(new CurlHandler)
                 ->withOptions([
                     'allow_redirects' => false,
                     'proxy' => '',
+                    'sink' => $sink,
                     'curl' => $this->pinned($host, $address),
-                    'progress' => function (int $downloadTotal, int $downloaded) use ($maxBytes, &$tooLarge): bool {
-                        $tooLarge = $maxBytes > 0 && max($downloadTotal, $downloaded) > $maxBytes;
+                    'progress' => function (int $downloadTotal, int $downloaded) use ($maxBytes, &$wireTooLarge): bool {
+                        $wireTooLarge = $maxBytes > 0 && max($downloadTotal, $downloaded) > $maxBytes;
 
-                        return $tooLarge;
+                        return $wireTooLarge;
                     },
                 ])
                 ->connectTimeout($secondsLeft)
@@ -204,7 +208,7 @@ class RemoteImageDownloader
                 ->accept('image/*')
                 ->get((string) $uri);
         } catch (Throwable $exception) {
-            if ($tooLarge) {
+            if ($wireTooLarge || $limit->exceeded) {
                 throw $this->tooLarge($maxBytes);
             }
 
@@ -213,13 +217,38 @@ class RemoteImageDownloader
             }
 
             throw $exception;
+        } finally {
+            if (is_resource($sink)) {
+                fclose($sink);
+            }
         }
 
-        if ($maxBytes > 0 && (int) $response->header('Content-Length') > $maxBytes) {
+        if ($limit->exceeded || ($maxBytes > 0 && (int) $response->header('Content-Length') > $maxBytes)) {
             throw $this->tooLarge($maxBytes);
         }
 
         return $response;
+    }
+
+    /**
+     * The download file, behind a write filter that refuses the bytes past the limit. That works on Guzzle 7 and 8
+     * alike (curl stops on the failed write) and counts the bytes after content decoding.
+     *
+     * @return resource
+     *
+     * @throws RemoteImageException
+     */
+    private function sink(string $targetPath, DownloadLimit $limit)
+    {
+        LimitedWriteFilter::register();
+
+        $sink = fopen($targetPath, 'w+b');
+
+        if ($sink === false || stream_filter_append($sink, LimitedWriteFilter::NAME, STREAM_FILTER_WRITE, $limit) === false) {
+            throw new RemoteImageException('The image could not be stored temporarily, so nothing was uploaded. Try again later.');
+        }
+
+        return $sink;
     }
 
     /**
@@ -257,40 +286,6 @@ class RemoteImageDownloader
         }
 
         return $addresses[0];
-    }
-
-    /**
-     * @throws RemoteImageException
-     */
-    private function store(StreamInterface $body, string $targetPath, int $maxBytes): void
-    {
-        $target = fopen($targetPath, 'wb');
-
-        if ($target === false) {
-            throw new RemoteImageException('The image could not be stored temporarily, so nothing was uploaded. Try again later.');
-        }
-
-        $written = 0;
-
-        try {
-            if ($body->isSeekable()) {
-                $body->rewind();
-            }
-
-            while (! $body->eof()) {
-                $chunk = $body->read(self::READ_BYTES);
-                $written += strlen($chunk);
-
-                if ($maxBytes > 0 && $written > $maxBytes) {
-                    throw $this->tooLarge($maxBytes);
-                }
-
-                fwrite($target, $chunk);
-            }
-        } finally {
-            fclose($target);
-            $body->close();
-        }
     }
 
     private function tooLarge(int $maxBytes): RemoteImageException

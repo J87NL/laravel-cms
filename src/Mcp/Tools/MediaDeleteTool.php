@@ -109,7 +109,11 @@ class MediaDeleteTool extends Tool
     {
         report($exception);
 
-        $gone = ! MediaAsset::query()->whereKey($id)->exists();
+        try {
+            $gone = ! MediaAsset::query()->whereKey($id)->exists();
+        } catch (Throwable) {
+            $gone = false;
+        }
 
         return ['id' => $id, 'status' => $gone ? 'deleted' : 'failed', ...$details];
     }
