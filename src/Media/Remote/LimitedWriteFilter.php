@@ -7,8 +7,9 @@ namespace J87NL\Cms\Media\Remote;
 use php_user_filter;
 
 /**
- * A write filter that fails the write which passes the DownloadLimit given as its parameter, so curl stops the
- * transfer with a write error. It sees the bytes after content decoding, so a compressed body cannot slip past it.
+ * A write filter that drops every byte past the DownloadLimit given as its parameter, so the file never grows past the
+ * limit, and marks the limit as exceeded. It never fails the write: on Guzzle 7 an exception from the curl write
+ * callback would keep the transfer running until the timeout, so the progress callback stops the transfer instead.
  */
 class LimitedWriteFilter extends php_user_filter
 {
@@ -31,11 +32,12 @@ class LimitedWriteFilter extends php_user_filter
         $limit = $this->params;
 
         while ($bucket = stream_bucket_make_writeable($in)) {
+            $consumed += $bucket->datalen;
+
             if ($limit instanceof DownloadLimit && ! $limit->accepts($bucket->datalen)) {
-                return PSFS_ERR_FATAL;
+                continue;
             }
 
-            $consumed += $bucket->datalen;
             stream_bucket_append($out, $bucket);
         }
 

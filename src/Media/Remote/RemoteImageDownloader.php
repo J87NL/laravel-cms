@@ -21,11 +21,8 @@ use Throwable;
  * followed by hand and checked the same way, and the download stops as soon as it passes the size limit or the time
  * limit.
  *
- * The request always goes through Guzzle's curl handler, without a proxy: the stream handler and a proxy would both
- * resolve the host name again, which would undo the pinning. Only CURLOPT_RESOLVE is passed as a curl option; Guzzle 8
- * refuses curl options it has a request option for. The body goes straight into the target file through
- * LimitedWriteFilter, which stops the transfer past the size limit on Guzzle 7 and 8 and counts decoded bytes; the
- * progress callback stops it even earlier on Guzzle 8.
+ * The request always goes through Guzzle's curl handler without a proxy (the stream handler and a proxy would both
+ * resolve the host name again, which would undo the pinning). TransferOptions holds the options per Guzzle version.
  */
 class RemoteImageDownloader
 {
@@ -169,9 +166,6 @@ class RemoteImageDownloader
     }
 
     /**
-     * @throws RemoteImageException
-     */
-    /**
      * Requests $uri and writes its body to $targetPath (replacing what an earlier redirect wrote there).
      *
      * @throws RemoteImageException
@@ -192,17 +186,10 @@ class RemoteImageDownloader
 
         try {
             $response = Http::setHandler(new CurlHandler)
-                ->withOptions([
-                    'allow_redirects' => false,
-                    'proxy' => '',
-                    'sink' => $sink,
-                    'curl' => $this->pinned($host, $address),
-                    'progress' => function (int $downloadTotal, int $downloaded) use ($maxBytes, &$wireTooLarge): bool {
-                        $wireTooLarge = $maxBytes > 0 && max($downloadTotal, $downloaded) > $maxBytes;
-
-                        return $wireTooLarge;
-                    },
-                ])
+                ->withOptions(TransferOptions::build($sink, $this->pinned($host, $address), $maxBytes, function () use (&$wireTooLarge): void {
+                    $wireTooLarge = true;
+                }))
+                ->withHeaders(['Accept-Encoding' => 'identity'])
                 ->connectTimeout($secondsLeft)
                 ->timeout($secondsLeft)
                 ->accept('image/*')
@@ -225,6 +212,10 @@ class RemoteImageDownloader
 
         if ($limit->exceeded || ($maxBytes > 0 && (int) $response->header('Content-Length') > $maxBytes)) {
             throw $this->tooLarge($maxBytes);
+        }
+
+        if (! in_array(strtolower(trim($response->header('Content-Encoding'))), ['', 'identity'], true)) {
+            throw new RemoteImageException(sprintf('%s sent the image compressed (%s) although it was asked not to, so nothing was uploaded. Send the file as content_base64 instead.', $host, $response->header('Content-Encoding')));
         }
 
         return $response;

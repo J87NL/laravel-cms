@@ -12,8 +12,11 @@ use Illuminate\Testing\Fluent\AssertableJson;
 use J87NL\Cms\CmsPermission;
 use J87NL\Cms\Mcp\ImageUploader;
 use J87NL\Cms\Mcp\Tools\MediaUploadTool;
+use J87NL\Cms\Media\Remote\DownloadLimit;
 use J87NL\Cms\Media\Remote\HostResolver;
+use J87NL\Cms\Media\Remote\LimitedWriteFilter;
 use J87NL\Cms\Media\Remote\RemoteImageDownloader;
+use J87NL\Cms\Media\Remote\TransferOptions;
 use J87NL\Cms\Models\MediaAsset;
 use J87NL\Cms\Tests\Fixtures\Mcp\CmsTestServer;
 
@@ -432,6 +435,7 @@ it('pins the connection to the checked address, without a proxy or the stream ha
     expect($seen)->toHaveCount(2)
         ->and($seen[0]['curl'][CURLOPT_RESOLVE])->toBe(['images.example.com:443:93.184.216.34'])
         ->and($seen[0]['progress'])->toBeCallable()
+        ->and($seen[0]['decode_content'])->toBeFalse()
         ->and($seen[0]['proxy'])->toBe('')
         ->and($seen[0]['allow_redirects'])->toBeFalse()
         ->and($seen[0]['stream'] ?? false)->toBeFalse()
@@ -537,4 +541,63 @@ it('refuses past the limit from the progress callback, with the arguments Guzzle
     CmsTestServer::actingAs(cmsUser(CmsPermission::Media))
         ->tool(MediaUploadTool::class, ['source_url' => 'https://example.com/big.png', 'alt' => 'Groot'])
         ->assertHasErrors(['larger than 1 kB, so the download was stopped']);
+});
+
+it('refuses an image that is sent compressed anyway', function (): void {
+    fakeDns(['example.com' => ['93.184.216.34']]);
+    Http::fake(['https://example.com/logo.png' => Http::response('small', 200, ['Content-Encoding' => 'gzip'])]);
+
+    CmsTestServer::actingAs(cmsUser(CmsPermission::Media))
+        ->tool(MediaUploadTool::class, ['source_url' => 'https://example.com/logo.png', 'alt' => 'Logo'])
+        ->assertHasErrors(['example.com sent the image compressed (gzip) although it was asked not to']);
+
+    Http::assertSent(fn (HttpRequest $request): bool => $request->header('Accept-Encoding') === ['identity']);
+});
+
+it('builds options that stop an oversized transfer on Guzzle 7 and on Guzzle 8', function (int $version): void {
+    $sink = fopen('php://memory', 'w+b');
+    $stopped = [];
+    $options = TransferOptions::build($sink, [CURLOPT_RESOLVE => ['example.com:443:93.184.216.34']], 1024, function (int $bytes) use (&$stopped): void {
+        $stopped[] = $bytes;
+    }, $version);
+
+    expect($options['proxy'])->toBe('')
+        ->and($options['decode_content'])->toBeFalse()
+        ->and($options['allow_redirects'])->toBeFalse()
+        ->and($options['sink'])->toBe($sink)
+        ->and($options['curl'][CURLOPT_RESOLVE])->toBe(['example.com:443:93.184.216.34']);
+
+    if ($version >= 8) {
+        expect($options['curl'])->toHaveCount(1)
+            ->and($options['progress'](0, 1024, 0, 0))->toBeFalse()
+            ->and($options['progress'](0, 1025, 0, 0))->toBeTrue();
+    } else {
+        expect($options)->not->toHaveKey('progress')
+            ->and($options['curl'][CURLOPT_NOPROGRESS])->toBeFalse()
+            ->and($options['curl'][CURLOPT_PROGRESSFUNCTION](null, 2048, 10, 0, 0))->toBe(1)
+            ->and($options['curl'][CURLOPT_PROGRESSFUNCTION](null, 0, 1000, 0, 0))->toBe(0);
+    }
+
+    expect($stopped)->toBe([$version >= 8 ? 1025 : 2048]);
+})->with([
+    'guzzle 7' => [7],
+    'guzzle 8' => [8],
+]);
+
+it('keeps a download file within the limit and marks the limit as exceeded', function (): void {
+    LimitedWriteFilter::register();
+    $limit = new DownloadLimit(1024);
+    $path = (string) tempnam(sys_get_temp_dir(), 'limit');
+    $file = fopen($path, 'w+b');
+    stream_filter_append($file, LimitedWriteFilter::NAME, STREAM_FILTER_WRITE, $limit);
+
+    expect(fwrite($file, str_repeat('a', 1000)))->toBe(1000)
+        ->and(fwrite($file, str_repeat('b', 100)))->toBe(100)
+        ->and($limit->exceeded)->toBeTrue();
+
+    fclose($file);
+
+    expect(filesize($path))->toBe(1000);
+
+    unlink($path);
 });
