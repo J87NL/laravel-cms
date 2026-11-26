@@ -22,6 +22,18 @@ use J87NL\Cms\Pages\PendingRevisionEditor;
 use J87NL\Cms\Tests\TestCase;
 use Orchestra\Testbench\Factories\UserFactory;
 
+// In a parallel run each process gets its own temporary directory, so the tests that list
+// it to check for leftover upload files see only their own process's files.
+if (($token = getenv('TEST_TOKEN')) !== false && $token !== '') {
+    $directory = sprintf('%s/laravel-cms-tests-%s', rtrim(getenv('TMPDIR') ?: '/tmp', '/'), $token);
+
+    if (! is_dir($directory)) {
+        mkdir($directory, 0700, true);
+    }
+
+    putenv('TMPDIR='.$directory);
+}
+
 pest()->extend(TestCase::class)->in('Feature');
 
 pest()->beforeEach(function (): void {

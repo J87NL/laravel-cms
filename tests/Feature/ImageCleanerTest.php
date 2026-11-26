@@ -210,7 +210,7 @@ test('a failed upload leaves no temporary file and no row', function (): void {
         }
     };
     app()->instance(ImageCleaner::class, $cleaner);
-    MediaAsset::creating(fn () => throw new RuntimeException('Saving failed'));
+    MediaAsset::created(fn () => throw new RuntimeException('Saving failed'));
 
     expect(fn () => app(UploadMedia::class)->handle(UploadedFile::fake()->image('photo.jpg', 300, 200), [
         'alt' => 'A photo',
