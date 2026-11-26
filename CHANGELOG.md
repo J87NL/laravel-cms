@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.8.4] - 2026-11-26
+
+### Security
+
+- Requires `symfony/html-sanitizer` ^7.4.24 or ^8.1.12, so a host can no longer resolve versions with CVE-2026-133756 (meta refresh URLs whose time is followed by other characters are not checked).
+
 ## [0.8.3] - 2026-11-07
 
 Published as 0.8.3: the tag for 0.8.2 was first pushed with a capital `V` and Packagist kept that version name, so 0.8.2 was never released under its proper name. 0.8.3 is the same commit.
@@ -225,6 +231,7 @@ First release, extracted from the j87.nl app.
 
 - Require `symfony/html-sanitizer` `^7.4.13|^8.0.13` for CVE-2026-45064, CVE-2026-45066, CVE-2026-45753, CVE-2026-48760 and CVE-2026-48761.
 
+[0.8.4]: https://github.com/J87NL/laravel-cms/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/J87NL/laravel-cms/compare/v0.8.1...v0.8.3
 [0.8.1]: https://github.com/J87NL/laravel-cms/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/J87NL/laravel-cms/compare/v0.7.0...v0.8.0
