@@ -194,12 +194,30 @@ test('a still gif is re-encoded', function (): void {
 });
 
 test('a failed upload leaves no temporary file and no row', function (): void {
-    $before = glob(sprintf('%s/cms-image-*', sys_get_temp_dir())) ?: [];
+    // Record the files this upload creates rather than listing the shared temporary
+    // directory, where tests running in parallel create and remove their own files.
+    $cleaner = new class extends ImageCleaner
+    {
+        /** @var list<string> */
+        public array $paths = [];
 
-    expect(fn () => app(UploadMedia::class)->handle(UploadedFile::fake()->image('photo.jpg', 300, 200), []))
-        ->toThrow(Exception::class);
+        public function clean(string $source, string $mimeType): array
+        {
+            $cleaned = parent::clean($source, $mimeType);
+            $this->paths[] = $cleaned['path'];
 
-    expect(glob(sprintf('%s/cms-image-*', sys_get_temp_dir())) ?: [])->toBe($before)
+            return $cleaned;
+        }
+    };
+    app()->instance(ImageCleaner::class, $cleaner);
+    MediaAsset::created(fn () => throw new RuntimeException('Saving failed'));
+
+    expect(fn () => app(UploadMedia::class)->handle(UploadedFile::fake()->image('photo.jpg', 300, 200), [
+        'alt' => 'A photo',
+    ]))->toThrow(RuntimeException::class, 'Saving failed');
+
+    expect($cleaner->paths)->toHaveCount(1)
+        ->and(file_exists($cleaner->paths[0]))->toBeFalse()
         ->and(MediaAsset::query()
             ->count())->toBe(0);
 });
