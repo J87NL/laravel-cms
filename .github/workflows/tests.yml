@@ -24,4 +24,4 @@ jobs:
       - name: Composer install
         run: composer update --no-interaction --prefer-dist --ansi --with "laravel/mcp:${{ matrix.mcp }}"
       - name: Test
-        run: vendor/bin/pest
+        run: vendor/bin/pest --parallel
